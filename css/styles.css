@@ -211,6 +211,14 @@ body {
 .card--rule { border-left: 4px solid transparent; border-image: var(--grad) 1; }
 .card--linker .card__word { font-size: 1.14rem; }
 
+/* Карточка-ругательство (вкладка «Мат») — коралловый акцент, без «выучил» */
+.card--swear { border-color: color-mix(in srgb, var(--accent-rose) 32%, var(--border)); }
+.card--swear .card__word-row { padding-right: 8px; }
+.card--swear .card__word { color: var(--accent-rose); }
+.card--swear .card__example { border-left-color: color-mix(in srgb, var(--accent-rose) 60%, transparent); }
+.card--swear::before { background: linear-gradient(135deg, color-mix(in srgb, var(--accent-rose) 55%, transparent), transparent 45%); }
+.card--swear:hover { box-shadow: var(--shadow), 0 8px 30px color-mix(in srgb, var(--accent-rose) 26%, transparent); }
+
 .card__actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .tag-btn {
   border: 1px solid var(--border); background: var(--surface-2); color: var(--text);

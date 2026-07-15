@@ -11,7 +11,7 @@ import {
   getToken, setToken, isConfigured, checkAccess, assetUrl,
 } from "./github.js";
 
-const SECTION_LABEL = { word: "слово", linker: "связку", rule: "правило", song: "песню", text: "текст" };
+const SECTION_LABEL = { word: "слово", linker: "связку", rule: "правило", swear: "ругательство", song: "песню", text: "текст" };
 
 // ── Состояние интерфейса ─────────────────────────────────────────────
 const ui = { section: "word", filter: "learning", query: "", editMode: false, openSongId: null, openTextId: null };
@@ -83,10 +83,11 @@ async function resolveAsset(el, dir, name, mime) {
 // ── Фильтрация слов ──────────────────────────────────────────────────
 function visibleWords() {
   const q = ui.query.trim().toLowerCase();
+  const isSwear = ui.section === "swear";
   return getWords().filter((w) => {
     if ((w.category || "word") !== ui.section) return false;
-    if (ui.filter === "learned" && !w.learned) return false;
-    if (ui.filter === "learning" && w.learned) return false;
+    if (!isSwear && ui.filter === "learned" && !w.learned) return false;   // у мата нет «выучил»
+    if (!isSwear && ui.filter === "learning" && w.learned) return false;
     if (!q) return true;
     return (
       w.word.toLowerCase().includes(q) ||
@@ -100,7 +101,8 @@ function visibleWords() {
 function cardHtml(w) {
   const cat = w.category || "word";
   const isRule = cat === "rule";
-  const learnedCls = w.learned ? "is-learned" : "";
+  const isSwear = cat === "swear";
+  const learnedCls = !isSwear && w.learned ? "is-learned" : "";
 
   const head = isRule
     ? `<p class="card__rule">${esc(w.word)}</p>`
@@ -133,9 +135,12 @@ function cardHtml(w) {
 
   const actions = media || editBtns ? `<div class="card__actions">${media}${editBtns}</div>` : "";
 
+  const check = isSwear ? "" :
+    `<button class="card__check" data-act="learned" title="Отметить как выученное" aria-pressed="${w.learned}">${w.learned ? "✓" : ""}</button>`;
+
   return `
     <article class="card card--${cat} ${learnedCls}" data-id="${w.id}">
-      <button class="card__check" data-act="learned" title="Отметить как выученное" aria-pressed="${w.learned}">${w.learned ? "✓" : ""}</button>
+      ${check}
       <div class="card__body">
         ${head}
         ${meaning}
@@ -303,11 +308,15 @@ function updateCounts() {
 function render() {
   const isSong = ui.section === "song";
   const isText = ui.section === "text";
-  const isVocab = !isSong && !isText;
+  const isSwear = ui.section === "swear";
+  const isVocab = !isSong && !isText;      // словарная сетка: слова/связки/правила/мат
   $("#vocab-tools").classList.toggle("hidden", !isVocab);
   grid.classList.toggle("hidden", !isVocab);
   $("#songs").classList.toggle("hidden", !isSong);
   $("#texts").classList.toggle("hidden", !isText);
+  // у мата нет прогресса и фильтра «выучил» — только поиск
+  $(".progress").classList.toggle("hidden", !isVocab || isSwear);
+  $("#filters").classList.toggle("hidden", isSwear);
 
   if (isSong) renderSongs();
   else if (isText) renderTexts();

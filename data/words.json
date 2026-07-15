@@ -58,5 +58,17 @@
     "category": "rule",
     "createdAt": 5,
     "updatedAt": 5
+  },
+  {
+    "id": "demo_swear_cavolo",
+    "word": "Che cavolo",
+    "meaning": "какого чёрта, что за фигня (демо — реальный список загрузи через ☁️)",
+    "example": "Che cavolo stai dicendo?",
+    "exampleRu": "Что за фигню ты несёшь?",
+    "image": "",
+    "learned": false,
+    "category": "swear",
+    "createdAt": 6,
+    "updatedAt": 6
   }
 ]
