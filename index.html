@@ -27,6 +27,7 @@
         <button class="tab" data-section="linker">🔗 Связки <span class="tab__count" data-count="linker">0</span></button>
         <button class="tab" data-section="rule">📐 Правила <span class="tab__count" data-count="rule">0</span></button>
         <button class="tab" data-section="song">🎵 Песни <span class="tab__count" data-count="song">0</span></button>
+        <button class="tab" data-section="text">📜 Тексты <span class="tab__count" data-count="text">0</span></button>
       </nav>
 
       <!-- Инструменты для словаря/связок/правил -->
@@ -53,6 +54,12 @@
       <section id="songs" class="hidden">
         <div id="songs-list" class="songs-list"></div>
         <article id="song-view" class="song-view hidden"></article>
+      </section>
+
+      <!-- Раздел «Тексты»: список + чтение одного текста -->
+      <section id="texts" class="hidden">
+        <div id="texts-list" class="texts-list"></div>
+        <article id="text-view" class="text-view hidden"></article>
       </section>
 
       <p id="empty" class="empty hidden">Здесь пока пусто 🤔</p>
@@ -120,6 +127,25 @@
           </label>
         </div>
         <small class="hint">Слева и справа должно быть одинаковое число строк — они сопоставляются построчно.</small>
+        <div class="dialog__actions">
+          <button type="button" class="btn btn--ghost" data-close>Отмена</button>
+          <button type="submit" class="btn btn--primary">Сохранить</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Модалка: текст для заучивания -->
+    <dialog id="text-dialog" class="dialog">
+      <form method="dialog" class="dialog__form" id="text-form">
+        <h2 id="text-dialog-title" class="dialog__title">Новый текст</h2>
+        <label class="field">
+          <span>Название текста</span>
+          <input name="title" required placeholder="Мой распорядок дня" />
+        </label>
+        <label class="field">
+          <span>Текст (по-итальянски, без перевода)</span>
+          <textarea name="body" rows="10" placeholder="Ogni giorno mi sveglio alle otto…&#10;&#10;Пустая строка = новый абзац."></textarea>
+        </label>
         <div class="dialog__actions">
           <button type="button" class="btn btn--ghost" data-close>Отмена</button>
           <button type="submit" class="btn btn--primary">Сохранить</button>

@@ -103,11 +103,18 @@ export async function pullSongs() {
   const { data } = await pullJson(GITHUB.paths.songs, KEYS.shaSongs);
   return { songs: data };
 }
+export async function pullTexts() {
+  const { data } = await pullJson(GITHUB.paths.texts, KEYS.shaTexts);
+  return { texts: data };
+}
 export function pushWords(words, message = "Update words") {
   return pushJson(GITHUB.paths.words, KEYS.shaWords, words, message);
 }
 export function pushSongs(songs, message = "Update songs") {
   return pushJson(GITHUB.paths.songs, KEYS.shaSongs, songs, message);
+}
+export function pushTexts(texts, message = "Update texts") {
+  return pushJson(GITHUB.paths.texts, KEYS.shaTexts, texts, message);
 }
 
 // ── Бинарные ассеты из приватного репо (mp3, картинки) ──────────────

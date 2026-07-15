@@ -4,16 +4,17 @@ import {
   loadInitial, subscribe,
   getWords, setWords, addWord, updateWord, deleteWord, toggleLearned,
   getSongs, setSongs, addSong, updateSong, deleteSong,
+  getTexts, setTexts, addText, updateText, deleteText,
 } from "./store.js";
 import {
-  pullWords, pullSongs, pushWords, pushSongs,
+  pullWords, pullSongs, pullTexts, pushWords, pushSongs, pushTexts,
   getToken, setToken, isConfigured, checkAccess, assetUrl,
 } from "./github.js";
 
-const SECTION_LABEL = { word: "слово", linker: "связку", rule: "правило", song: "песню" };
+const SECTION_LABEL = { word: "слово", linker: "связку", rule: "правило", song: "песню", text: "текст" };
 
 // ── Состояние интерфейса ─────────────────────────────────────────────
-const ui = { section: "word", filter: "learning", query: "", editMode: false, openSongId: null };
+const ui = { section: "word", filter: "learning", query: "", editMode: false, openSongId: null, openTextId: null };
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const grid = $("#grid");
@@ -51,6 +52,16 @@ function speak(word) {
   if (!("speechSynthesis" in window)) return;
   const u = new SpeechSynthesisUtterance(coreWord(word));
   u.lang = "it-IT";
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+
+// Озвучить произвольный текст целиком (для вкладки «Тексты»).
+function speakText(text) {
+  if (!("speechSynthesis" in window) || !text) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "it-IT";
+  u.rate = 0.95;
   speechSynthesis.cancel();
   speechSynthesis.speak(u);
 }
@@ -221,11 +232,69 @@ function renderSongs() {
   }
 }
 
+// ── Раздел «Тексты» ──────────────────────────────────────────────────
+function textCardHtml(t) {
+  const preview = (t.body || "").replace(/\n+/g, " ").slice(0, 90);
+  const editBtns = ui.editMode
+    ? `<div class="card__actions" style="margin-left:auto">
+         <button class="tag-btn tag-btn--edit" data-act="edit-text">✏️</button>
+         <button class="tag-btn tag-btn--del" data-act="del-text">🗑</button>
+       </div>` : "";
+  return `
+    <div class="text-card" data-id="${t.id}" data-act="open-text">
+      <div class="text-card__icon">📜</div>
+      <div class="text-card__meta">
+        <h3 class="text-card__title">${esc(t.title)}</h3>
+        <p class="text-card__preview">${esc(preview)}${(t.body || "").length > 90 ? "…" : ""}</p>
+      </div>
+      ${editBtns}
+    </div>`;
+}
+
+// Тело текста → абзацы (пустая строка = новый абзац, перевод строки = <br>)
+function bodyToHtml(body = "") {
+  return body.split(/\n{2,}/).map((par) =>
+    `<p class="text-par">${par.split("\n").map(esc).join("<br>")}</p>`
+  ).join("");
+}
+
+function textViewHtml(t) {
+  return `
+    <div class="song-view__top">
+      <button class="song-back" data-act="close-text">← Все тексты</button>
+      <button class="tag-btn" data-act="speak-text" title="Озвучить">🔊 Озвучить</button>
+    </div>
+    <div class="text-view__head">
+      <h2 class="text-view__title">${esc(t.title)}</h2>
+    </div>
+    <div class="text-body">${bodyToHtml(t.body) || '<p class="empty">Текст пуст.</p>'}</div>`;
+}
+
+function renderTexts() {
+  const listEl = $("#texts-list");
+  const viewEl = $("#text-view");
+  const text = ui.openTextId ? getTexts().find((t) => t.id === ui.openTextId) : null;
+
+  if (text) {
+    listEl.classList.add("hidden");
+    viewEl.classList.remove("hidden");
+    viewEl.innerHTML = textViewHtml(text);
+    empty.classList.add("hidden");
+  } else {
+    viewEl.classList.add("hidden");
+    listEl.classList.remove("hidden");
+    const texts = getTexts();
+    listEl.innerHTML = texts.map(textCardHtml).join("");
+    empty.classList.toggle("hidden", texts.length > 0);
+  }
+}
+
 // ── Общий рендер ─────────────────────────────────────────────────────
 function updateCounts() {
   const counts = {};
   getWords().forEach((w) => { const c = w.category || "word"; counts[c] = (counts[c] || 0) + 1; });
   counts.song = getSongs().length;
+  counts.text = getTexts().length;
   document.querySelectorAll(".tab__count").forEach((el) => {
     el.textContent = counts[el.dataset.count] || 0;
   });
@@ -233,11 +302,15 @@ function updateCounts() {
 
 function render() {
   const isSong = ui.section === "song";
-  $("#vocab-tools").classList.toggle("hidden", isSong);
-  grid.classList.toggle("hidden", isSong);
+  const isText = ui.section === "text";
+  const isVocab = !isSong && !isText;
+  $("#vocab-tools").classList.toggle("hidden", !isVocab);
+  grid.classList.toggle("hidden", !isVocab);
   $("#songs").classList.toggle("hidden", !isSong);
+  $("#texts").classList.toggle("hidden", !isText);
 
   if (isSong) renderSongs();
+  else if (isText) renderTexts();
   else renderVocab();
 
   updateCounts();
@@ -268,6 +341,21 @@ $("#songs").addEventListener("click", (e) => {
   else if (act === "close-song") { ui.openSongId = null; render(); }
   else if (act === "edit-song") { e.stopPropagation(); openSongDialog(id); }
   else if (act === "del-song") { e.stopPropagation(); if (confirm("Удалить песню?")) { if (ui.openSongId === id) ui.openSongId = null; deleteSong(id); } }
+});
+
+// ── Клики в разделе текстов ──────────────────────────────────────────
+$("#texts").addEventListener("click", (e) => {
+  const actEl = e.target.closest("[data-act]");
+  if (!actEl) return;
+  const act = actEl.dataset.act;
+  const cardEl = e.target.closest("[data-id]");
+  const id = cardEl ? cardEl.dataset.id : ui.openTextId;
+
+  if (act === "open-text") { ui.openTextId = id; render(); window.scrollTo({ top: 0 }); }
+  else if (act === "close-text") { speechSynthesis.cancel(); ui.openTextId = null; render(); }
+  else if (act === "speak-text") { const t = getTexts().find((x) => x.id === ui.openTextId); if (t) speakText(t.body); }
+  else if (act === "edit-text") { e.stopPropagation(); openTextDialog(id); }
+  else if (act === "del-text") { e.stopPropagation(); if (confirm("Удалить текст?")) { if (ui.openTextId === id) ui.openTextId = null; deleteText(id); } }
 });
 
 // ── Диалог слова / связки / правила ─────────────────────────────────
@@ -367,6 +455,36 @@ songForm.addEventListener("submit", (e) => {
   toast(editingSongId ? "Песня сохранена" : "Песня добавлена", "ok");
 });
 
+// ── Диалог текста ────────────────────────────────────────────────────
+const textDialog = $("#text-dialog");
+const textForm = $("#text-form");
+let editingTextId = null;
+
+function openTextDialog(id = null) {
+  editingTextId = id;
+  const title = $("#text-dialog-title");
+  if (id) {
+    const t = getTexts().find((x) => x.id === id);
+    title.textContent = "Редактировать текст";
+    textForm.title.value = t.title;
+    textForm.body.value = t.body || "";
+  } else {
+    title.textContent = "Новый текст";
+    textForm.reset();
+  }
+  textDialog.showModal();
+}
+
+textForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const data = { title: textForm.title.value.trim(), body: textForm.body.value.trim() };
+  if (!data.title) return;
+  if (editingTextId) updateText(editingTextId, data);
+  else addText(data);
+  textDialog.close();
+  toast(editingTextId ? "Текст сохранён" : "Текст добавлен", "ok");
+});
+
 // ── Синхронизация с GitHub ───────────────────────────────────────────
 const syncDialog = $("#sync-dialog");
 
@@ -400,11 +518,12 @@ $("#btn-save-token").addEventListener("click", async () => {
 $("#btn-pull").addEventListener("click", async () => {
   try {
     toast("Загружаю из GitHub…");
-    const [{ words }, { songs }] = await Promise.all([pullWords(), pullSongs()]);
+    const [{ words }, { songs }, { texts }] = await Promise.all([pullWords(), pullSongs(), pullTexts()]);
     if (words) setWords(words);
     if (songs) setSongs(songs);
-    if (!words && !songs) { await checkAccess(); toast("Репозиторий доступен, но файлов данных в нём пока нет", "warn"); }
-    else toast(`Загружено: ${words ? words.length : 0} слов, ${songs ? songs.length : 0} песен`, "ok");
+    if (texts) setTexts(texts);
+    if (!words && !songs && !texts) { await checkAccess(); toast("Репозиторий доступен, но файлов данных в нём пока нет", "warn"); }
+    else toast(`Загружено: ${words ? words.length : 0} слов, ${songs ? songs.length : 0} песен, ${texts ? texts.length : 0} текстов`, "ok");
     render();
     refreshSyncStatus();
   } catch (err) { toast(err.message, "err"); }
@@ -413,7 +532,11 @@ $("#btn-pull").addEventListener("click", async () => {
 $("#btn-push").addEventListener("click", async () => {
   try {
     toast("Отправляю в GitHub…");
-    await Promise.all([pushWords(getWords(), "Update words from app"), pushSongs(getSongs(), "Update songs from app")]);
+    await Promise.all([
+      pushWords(getWords(), "Update words from app"),
+      pushSongs(getSongs(), "Update songs from app"),
+      pushTexts(getTexts(), "Update texts from app"),
+    ]);
     toast("Отправлено в GitHub", "ok");
     refreshSyncStatus();
   } catch (err) { toast("Ошибка отправки: " + err.message, "err"); }
@@ -438,7 +561,11 @@ function scheduleAutoPush() {
   setSyncStatus("saving");
   pushTimer = setTimeout(async () => {
     try {
-      await Promise.all([pushWords(getWords(), "Auto-sync from app"), pushSongs(getSongs(), "Auto-sync from app")]);
+      await Promise.all([
+        pushWords(getWords(), "Auto-sync from app"),
+        pushSongs(getSongs(), "Auto-sync from app"),
+        pushTexts(getTexts(), "Auto-sync from app"),
+      ]);
       refreshSyncStatus();
       setSyncStatus("saved");
     } catch (err) { console.warn("auto-push failed:", err.message); setSyncStatus("error"); }
@@ -461,6 +588,7 @@ $("#tabs").addEventListener("click", (e) => {
   if (!tab) return;
   ui.section = tab.dataset.section;
   ui.openSongId = null;
+  ui.openTextId = null;
   [...$("#tabs").children].forEach((t) => t.classList.toggle("is-active", t === tab));
   render();
 });
@@ -473,6 +601,7 @@ $("#btn-edit").addEventListener("click", () => {
 
 $("#btn-add").addEventListener("click", () => {
   if (ui.section === "song") openSongDialog(null);
+  else if (ui.section === "text") openTextDialog(null);
   else openWordDialog(null);
 });
 

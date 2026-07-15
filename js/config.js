@@ -7,6 +7,7 @@ export const GITHUB = {
   paths: {
     words: "words.json",         // слова / связки / правила
     songs: "songs.json",         // песни (текст + перевод)
+    texts: "texts.json",         // тексты для заучивания (про меня)
   },
   dirs: {
     audio: "audio",              // mp3-файлы песен
@@ -18,9 +19,11 @@ export const GITHUB = {
 export const KEYS = {
   words:    "it_words_v1",
   songs:    "it_songs_v1",
+  texts:    "it_texts_v1",
   token:    "it_gh_token",
   shaWords: "it_gh_sha_words",
   shaSongs: "it_gh_sha_songs",
+  shaTexts: "it_gh_sha_texts",
   theme:    "it_theme",
   lastSync: "it_last_sync",
 };
@@ -29,4 +32,5 @@ export const KEYS = {
 export const DATA_URL = {
   words: "data/words.json",
   songs: "data/songs.json",
+  texts: "data/texts.json",
 };

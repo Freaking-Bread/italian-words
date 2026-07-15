@@ -1,0 +1,9 @@
+[
+  {
+    "id": "demo_text",
+    "title": "Testo di prova (демо)",
+    "body": "Questo è un testo di esempio da imparare a memoria.\nQui va il tuo testo in italiano, senza traduzione.\n\nUna riga vuota crea un nuovo paragrafo. Premi 🔊 in alto per ascoltarlo.",
+    "createdAt": 1,
+    "updatedAt": 1
+  }
+]

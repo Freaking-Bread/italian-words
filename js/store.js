@@ -4,6 +4,7 @@ import { KEYS, DATA_URL } from "./config.js";
 
 let words = [];
 let songs = [];
+let texts = [];
 const listeners = new Set();
 
 function emit() {
@@ -19,6 +20,7 @@ export function subscribe(fn) {
 // ── Геттеры / сеттеры ────────────────────────────────────────────────
 export function getWords() { return words; }
 export function getSongs() { return songs; }
+export function getTexts() { return texts; }
 
 export function setWords(next, { silent = false } = {}) {
   words = Array.isArray(next) ? next : [];
@@ -28,16 +30,22 @@ export function setSongs(next, { silent = false } = {}) {
   songs = Array.isArray(next) ? next : [];
   silent ? persistLocal() : emit();
 }
+export function setTexts(next, { silent = false } = {}) {
+  texts = Array.isArray(next) ? next : [];
+  silent ? persistLocal() : emit();
+}
 
 function persistLocal() {
   localStorage.setItem(KEYS.words, JSON.stringify(words));
   localStorage.setItem(KEYS.songs, JSON.stringify(songs));
+  localStorage.setItem(KEYS.texts, JSON.stringify(texts));
 }
 
 // Первичная загрузка: сначала localStorage, иначе стартовые демо-файлы.
 export async function loadInitial() {
   words = await loadPart(KEYS.words, DATA_URL.words);
   songs = await loadPart(KEYS.songs, DATA_URL.songs);
+  texts = await loadPart(KEYS.texts, DATA_URL.texts);
   persistLocal();
 }
 
@@ -105,5 +113,22 @@ export function updateSong(id, patch) {
 }
 export function deleteSong(id) {
   songs = songs.filter((s) => s.id !== id);
+  emit();
+}
+
+// ── Тексты для заучивания (без перевода) ─────────────────────────────
+export function addText({ title, body = "" }) {
+  const now = Date.now();
+  const item = { id: uid("t_"), title: title.trim(), body: body.trim(), createdAt: now, updatedAt: now };
+  texts = [item, ...texts];
+  emit();
+  return item;
+}
+export function updateText(id, patch) {
+  texts = texts.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: Date.now() } : t));
+  emit();
+}
+export function deleteText(id) {
+  texts = texts.filter((t) => t.id !== id);
   emit();
 }
