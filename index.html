@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0d12" />
+    <title>Il mio italiano · Мой итальянский</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 3 2'><rect width='1' height='2' x='0' fill='%23008C45'/><rect width='1' height='2' x='1' fill='%23F4F5F0'/><rect width='1' height='2' x='2' fill='%23CD212A'/></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <div class="bg-glow" aria-hidden="true"></div>
+
+    <header class="appbar">
+      <div class="appbar__row">
+        <h1 class="appbar__title"><span class="tricolore" aria-hidden="true"></span> Il&nbsp;mio&nbsp;italiano</h1>
+        <div class="appbar__actions">
+          <button id="btn-theme" class="icon-btn" title="Тема" aria-label="Сменить тему">☀️</button>
+          <button id="btn-sync" class="icon-btn" title="Синхронизация" aria-label="Синхронизация">☁️</button>
+          <button id="btn-edit" class="icon-btn" title="Режим редактирования" aria-label="Режим редактирования">✏️</button>
+        </div>
+      </div>
+
+      <nav class="tabs" id="tabs">
+        <button class="tab is-active" data-section="word">📖 Слова <span class="tab__count" data-count="word">0</span></button>
+        <button class="tab" data-section="linker">🔗 Связки <span class="tab__count" data-count="linker">0</span></button>
+        <button class="tab" data-section="rule">📐 Правила <span class="tab__count" data-count="rule">0</span></button>
+        <button class="tab" data-section="song">🎵 Песни <span class="tab__count" data-count="song">0</span></button>
+      </nav>
+
+      <!-- Инструменты для словаря/связок/правил -->
+      <div id="vocab-tools">
+        <div class="progress">
+          <div class="progress__bar"><span id="progress-fill" class="progress__fill"></span></div>
+          <span id="progress-text" class="progress__text">0 / 0</span>
+        </div>
+        <div class="appbar__row appbar__tools">
+          <input id="search" class="search" type="search" placeholder="Поиск слова или перевода…" autocomplete="off" />
+          <div class="chips" id="filters">
+            <button class="chip is-active" data-filter="learning">Учу</button>
+            <button class="chip" data-filter="learned">Выучено</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <!-- Сетка карточек (слова / связки / правила) -->
+      <div id="grid" class="grid" aria-live="polite"></div>
+
+      <!-- Раздел «Песни»: список + просмотр одной песни -->
+      <section id="songs" class="hidden">
+        <div id="songs-list" class="songs-list"></div>
+        <article id="song-view" class="song-view hidden"></article>
+      </section>
+
+      <p id="empty" class="empty hidden">Здесь пока пусто 🤔</p>
+    </main>
+
+    <button id="btn-add" class="fab" title="Добавить" aria-label="Добавить">＋</button>
+
+    <!-- Модалка: слово / связка / правило -->
+    <dialog id="word-dialog" class="dialog">
+      <form method="dialog" class="dialog__form" id="word-form">
+        <h2 id="word-dialog-title" class="dialog__title">Новое слово</h2>
+        <label class="field">
+          <span>Слово / фраза (по-итальянски)</span>
+          <input name="word" required placeholder="la serendipità" />
+        </label>
+        <label class="field">
+          <span>Перевод / значение / ассоциация</span>
+          <textarea name="meaning" rows="2" placeholder="счастливая случайность…"></textarea>
+        </label>
+        <label class="field">
+          <span>Пример в контексте (по-итальянски)</span>
+          <textarea name="example" rows="2" placeholder="È stato un incontro pieno di serendipità."></textarea>
+        </label>
+        <label class="field">
+          <span>Перевод примера (необязательно)</span>
+          <textarea name="exampleRu" rows="2" placeholder="Это была встреча, полная счастливых случайностей."></textarea>
+        </label>
+        <label class="field" id="field-image" hidden>
+          <span>Картинка к правилу (имя файла в repo/images или ссылка)</span>
+          <input name="image" placeholder="congiuntivo.png или https://…" />
+        </label>
+        <div class="dialog__actions">
+          <button type="button" class="btn btn--ghost" data-close>Отмена</button>
+          <button type="submit" class="btn btn--primary">Сохранить</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Модалка: песня -->
+    <dialog id="song-dialog" class="dialog">
+      <form method="dialog" class="dialog__form" id="song-form">
+        <h2 id="song-dialog-title" class="dialog__title">Новая песня</h2>
+        <div class="field-row">
+          <label class="field">
+            <span>Название</span>
+            <input name="title" required placeholder="Volare" />
+          </label>
+          <label class="field">
+            <span>Исполнитель</span>
+            <input name="artist" placeholder="Domenico Modugno" />
+          </label>
+        </div>
+        <label class="field">
+          <span>Аудио: имя mp3 в repo/audio или ссылка</span>
+          <input name="audio" placeholder="volare.mp3 или https://…" />
+        </label>
+        <div class="field-row">
+          <label class="field">
+            <span>Текст (по-итальянски) — строка = строка</span>
+            <textarea name="lyricsIt" rows="8" placeholder="Penso che un sogno così…&#10;non ritorni mai più…"></textarea>
+          </label>
+          <label class="field">
+            <span>Перевод (по-русски) — построчно</span>
+            <textarea name="lyricsRu" rows="8" placeholder="Думаю, что такой сон…&#10;больше никогда не вернётся…"></textarea>
+          </label>
+        </div>
+        <small class="hint">Слева и справа должно быть одинаковое число строк — они сопоставляются построчно.</small>
+        <div class="dialog__actions">
+          <button type="button" class="btn btn--ghost" data-close>Отмена</button>
+          <button type="submit" class="btn btn--primary">Сохранить</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Модалка: синхронизация с GitHub -->
+    <dialog id="sync-dialog" class="dialog">
+      <div class="dialog__form">
+        <h2 class="dialog__title">☁️ Синхронизация</h2>
+        <p class="muted" id="sync-status">Токен не задан — работаешь локально.</p>
+        <label class="field">
+          <span>GitHub Personal Access Token</span>
+          <input id="token-input" type="password" placeholder="github_pat_…" autocomplete="off" />
+          <small class="hint">Хранится только в этом браузере. Нужен доступ <code>Contents: read/write</code> к приватному репозиторию данных.</small>
+        </label>
+        <div class="sync-buttons">
+          <button class="btn btn--ghost" id="btn-pull">⬇️ Загрузить из GitHub</button>
+          <button class="btn btn--primary" id="btn-push">⬆️ Отправить в GitHub</button>
+        </div>
+        <div class="dialog__actions">
+          <button type="button" class="btn btn--ghost" data-close>Закрыть</button>
+          <button type="button" class="btn" id="btn-save-token">Сохранить токен</button>
+        </div>
+      </div>
+    </dialog>
+
+    <div id="sync-indicator" class="sync-indicator" role="status" aria-live="polite"></div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>

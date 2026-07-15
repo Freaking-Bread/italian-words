@@ -1,0 +1,17 @@
+[
+  {
+    "id": "demo_song",
+    "title": "Демо-песня",
+    "artist": "Пример (замени своими песнями)",
+    "audio": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+    "lyrics": [
+      { "it": "Questa è una canzone di prova.", "ru": "Это пробная песня." },
+      { "it": "A sinistra il testo in italiano,", "ru": "Слева — текст по-итальянски," },
+      { "it": "a destra la traduzione in russo.", "ru": "справа — перевод на русский." },
+      { "it": "", "ru": "" },
+      { "it": "Premi ▶ in alto per ascoltare.", "ru": "Нажми ▶ сверху, чтобы послушать." }
+    ],
+    "createdAt": 1,
+    "updatedAt": 1
+  }
+]

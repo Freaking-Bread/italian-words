@@ -1,0 +1,62 @@
+[
+  {
+    "id": "demo_ciao",
+    "word": "Ciao",
+    "meaning": "привет / пока (демо-слово)",
+    "example": "Ciao, come stai oggi?",
+    "exampleRu": "Привет, как ты сегодня?",
+    "image": "",
+    "learned": false,
+    "category": "word",
+    "createdAt": 1,
+    "updatedAt": 1
+  },
+  {
+    "id": "demo_serendipita",
+    "word": "la serendipità",
+    "meaning": "счастливая случайность (демо — нажми ☁️ и загрузи свои слова)",
+    "example": "Il nostro incontro è stato pura serendipità.",
+    "exampleRu": "Наша встреча была чистой счастливой случайностью.",
+    "image": "",
+    "learned": false,
+    "category": "word",
+    "createdAt": 2,
+    "updatedAt": 2
+  },
+  {
+    "id": "demo_addirittura",
+    "word": "addirittura",
+    "meaning": "даже, прямо-таки (демо-слово)",
+    "example": "Ha imparato l'italiano in un mese, addirittura!",
+    "exampleRu": "Он выучил итальянский за месяц, прямо-таки!",
+    "image": "",
+    "learned": true,
+    "category": "word",
+    "createdAt": 3,
+    "updatedAt": 3
+  },
+  {
+    "id": "demo_linker_quindi",
+    "word": "quindi",
+    "meaning": "следовательно, поэтому (демо-связка)",
+    "example": "Piove, quindi restiamo a casa.",
+    "exampleRu": "Идёт дождь, поэтому остаёмся дома.",
+    "image": "",
+    "learned": false,
+    "category": "linker",
+    "createdAt": 4,
+    "updatedAt": 4
+  },
+  {
+    "id": "demo_rule_articoli",
+    "word": "Определённый артикль зависит от рода и первой буквы слова: il / lo / la / l' (ед.), i / gli / le (мн.). Демо-правило — сюда можно добавлять и картинки.",
+    "meaning": "",
+    "example": "",
+    "exampleRu": "",
+    "image": "",
+    "learned": false,
+    "category": "rule",
+    "createdAt": 5,
+    "updatedAt": 5
+  }
+]
