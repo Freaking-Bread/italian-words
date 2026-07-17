@@ -404,10 +404,73 @@ body {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ===== Адаптив =============================================== */
+
+/* Телефон: вкладки уезжают вниз отдельной панелью. Шесть штук в строку
+   шапки не влезают (нужно ~550px при ширине экрана 360px), а внизу они
+   ещё и под большим пальцем.
+   backdrop-filter у .appbar при этом приходится снять: фильтр на предке
+   делает его containing block для position:fixed, и панель прилипла бы
+   к шапке вместо низа экрана. */
 @media (max-width: 640px) {
-  .tab { font-size: .82rem; padding: 9px 4px; gap: 4px; }
-  .tab__count { min-width: 18px; padding: 1px 5px; }
+  body {
+    min-height: 100dvh;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+
+  .appbar {
+    background: var(--bg);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .tabs {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    margin: 0; gap: 2px; padding: 6px 4px max(6px, env(safe-area-inset-bottom));
+    border: none; border-top: 1px solid var(--border); border-radius: 0;
+    background: color-mix(in srgb, var(--bg) 86%, transparent);
+    backdrop-filter: saturate(1.5) blur(16px);
+    -webkit-backdrop-filter: saturate(1.5) blur(16px);
+  }
+  .tab {
+    position: relative; flex-direction: column; gap: 3px; min-width: 0;
+    padding: 7px 2px 6px; border-radius: 12px;
+  }
+  .tab__ic { font-size: 1.22rem; line-height: 1; }
+  .tab__label {
+    font-size: .6rem; font-weight: 700; letter-spacing: -.01em;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+  }
+  .tab.is-active { background: var(--surface); box-shadow: none; }
+  .tab__count {
+    position: absolute; top: 2px; left: 50%; transform: translateX(2px);
+    min-width: 14px; padding: 0 3px; font-size: .54rem; line-height: 14px;
+    background: var(--surface-3);
+  }
+
+  /* Всё плавающее поднимаем над панелью */
+  .fab {
+    width: 54px; height: 54px; font-size: 1.75rem;
+    right: max(14px, env(safe-area-inset-right));
+    bottom: calc(70px + env(safe-area-inset-bottom));
+  }
+  .sync-indicator { bottom: calc(68px + env(safe-area-inset-bottom)); }
+  .toast { bottom: calc(72px + env(safe-area-inset-bottom)); }
+
+  /* Плеер липнет под шапку, в которой на вкладке песен остался только
+     заголовок: padding-top + строка кнопок (42px) + padding-bottom. */
+  .player { top: calc(56px + max(12px, env(safe-area-inset-top))); }
+
+  /* Цели под палец */
+  .card__check { width: 34px; height: 34px; top: 12px; right: 12px; }
+  .card__word-row, .card__rule { padding-right: 42px; }
+  .tag-btn { padding: 9px 13px; font-size: .82rem; }
+  .mini-btn { padding: 6px; margin: -6px; }  /* область нажатия без сдвига вёрстки */
+
+  /* Длинные формы (песня с двумя текстами) должны прокручиваться */
+  .dialog { max-height: calc(100dvh - 24px); overflow-y: auto; }
+  .dialog__form { padding: 20px; }
 }
+
 @media (max-width: 560px) {
   .grid { grid-template-columns: 1fr; }
   .songs-list { grid-template-columns: 1fr; }
@@ -417,5 +480,16 @@ body {
   /* Текст песни: чередуем строки (ит → рус) вместо двух колонок */
   .lyric-line { grid-template-columns: 1fr; gap: 3px; padding: 10px 0; }
   .lyric-ru { padding-left: 12px; border-left: 2px solid var(--border); }
-  .player { top: 66px; }
+}
+
+/* Тач-экран: :hover залипает после тапа, карточка остаётся приподнятой.
+   Гасим «подъёмы», отклик даём на само нажатие. */
+@media (hover: none) {
+  .card:hover { transform: none; box-shadow: var(--shadow); }
+  .card:hover::before { opacity: 0; }
+  .card.is-learned:hover { opacity: .62; }
+  .song-card:hover, .text-card:hover {
+    transform: none; border-color: var(--border); box-shadow: var(--shadow);
+  }
+  .card:active, .song-card:active, .text-card:active { transform: scale(.985); }
 }
