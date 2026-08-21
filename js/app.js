@@ -1,13 +1,15 @@
 // Интерфейс: рендер слов и песен, редактирование, синхронизация, тема.
-import { KEYS, GITHUB } from "./config.js";
+import { KEYS, GITHUB, DATA_VERSION } from "./config.js";
 import {
   loadInitial, subscribe,
   getWords, setWords, addWord, updateWord, deleteWord, toggleLearned,
   getSongs, setSongs, addSong, updateSong, deleteSong,
   getTexts, setTexts, addText, updateText, deleteText,
+  getAssoc, setAssoc, addAssoc, updateAssoc, deleteAssoc,
 } from "./store.js";
 import {
-  pullWords, pullSongs, pullTexts, pushWords, pushSongs, pushTexts,
+  pullWords, pullSongs, pullTexts, pullAssoc,
+  pushWords, pushSongs, pushTexts, pushAssoc,
   getToken, setToken, isConfigured, checkAccess, assetUrl,
 } from "./github.js";
 import {
@@ -19,7 +21,7 @@ import {
 // Иконка из спрайта
 const icon = (name, cls = "ic") => `<svg class="${cls}"><use href="#ic-${name}"/></svg>`;
 
-const SECTION_LABEL = { word: "слово", linker: "связку", rule: "правило", swear: "ругательство", song: "песню", text: "текст" };
+const SECTION_LABEL = { word: "слово", linker: "связку", rule: "правило", swear: "ругательство", song: "песню", text: "текст", assoc: "ассоциацию" };
 
 // ── Состояние интерфейса ─────────────────────────────────────────────
 const ui = { section: "word", filter: "learning", query: "", editMode: false, openSongId: null, openTextId: null };
@@ -294,6 +296,45 @@ function renderSongs() {
   }
 }
 
+// ── Раздел «Ассоциации» ──────────────────────────────────────────────
+// Листы с картинками-подсказками: сетка превью → тап открывает во весь экран.
+function assocCardHtml(a) {
+  const editBtns = ui.editMode
+    ? `<div class="assoc-card__tools">
+         <button class="tag-btn tag-btn--edit" data-act="edit-assoc" aria-label="Правка">${icon("pencil")}</button>
+         <button class="tag-btn tag-btn--del" data-act="del-assoc" aria-label="Удалить">${icon("trash")}</button>
+       </div>` : "";
+  const img = a.image
+    ? `<img class="assoc-card__img" alt="${esc(a.title)}" loading="lazy" ${isUrl(a.image) ? `src="${esc(a.image)}"` : `data-img="${esc(a.image)}"`} />`
+    : `<div class="assoc-card__ph">${icon("image")}</div>`;
+  return `
+    <figure class="assoc-card" data-id="${a.id}" data-act="open-assoc">
+      ${editBtns}
+      <div class="assoc-card__frame">${img}</div>
+      <figcaption class="assoc-card__meta">
+        <h3 class="assoc-card__title">${esc(a.title)}</h3>
+        ${a.note ? `<p class="assoc-card__note">${esc(a.note)}</p>` : ""}
+      </figcaption>
+    </figure>`;
+}
+
+function visibleAssoc() {
+  const q = ui.query.trim().toLowerCase();
+  if (!q) return getAssoc();
+  return getAssoc().filter((a) =>
+    (a.title || "").toLowerCase().includes(q) || (a.note || "").toLowerCase().includes(q));
+}
+
+function renderAssoc() {
+  const listEl = $("#assoc-list");
+  const list = visibleAssoc();
+  listEl.innerHTML = list.map(assocCardHtml).join("");
+  // превью лежат в приватном репо — тянем их по токену
+  listEl.querySelectorAll("img[data-img]").forEach((img) =>
+    resolveAsset(img, GITHUB.dirs.images, img.dataset.img, "image/jpeg"));
+  empty.classList.toggle("hidden", list.length > 0);
+}
+
 // ── Раздел «Тексты» ──────────────────────────────────────────────────
 function textCardHtml(t) {
   const preview = (t.body || "").replace(/\n+/g, " ").slice(0, 90);
@@ -355,6 +396,7 @@ function updateCounts() {
   getWords().forEach((w) => { const c = w.category || "word"; counts[c] = (counts[c] || 0) + 1; });
   counts.song = getSongs().length;
   counts.text = getTexts().length;
+  counts.assoc = getAssoc().length;
   document.querySelectorAll(".tab__count").forEach((el) => {
     el.textContent = counts[el.dataset.count] || 0;
   });
@@ -363,18 +405,22 @@ function updateCounts() {
 function render() {
   const isSong = ui.section === "song";
   const isText = ui.section === "text";
+  const isAssoc = ui.section === "assoc";
   const isSwear = ui.section === "swear";
-  const isVocab = !isSong && !isText;      // словарная сетка: слова/связки/правила/мат
-  $("#vocab-tools").classList.toggle("hidden", !isVocab);
+  const isVocab = !isSong && !isText && !isAssoc;  // словарная сетка: слова/связки/правила/мат
+  // ассоциациям из инструментов нужен только поиск
+  $("#vocab-tools").classList.toggle("hidden", !isVocab && !isAssoc);
   grid.classList.toggle("hidden", !isVocab);
   $("#songs").classList.toggle("hidden", !isSong);
   $("#texts").classList.toggle("hidden", !isText);
-  // у мата нет прогресса и фильтра «выучил» — только поиск
+  $("#assoc").classList.toggle("hidden", !isAssoc);
+  // у мата и ассоциаций нет прогресса и фильтра «выучил» — только поиск
   $(".progress").classList.toggle("hidden", !isVocab || isSwear);
-  $("#filters").classList.toggle("hidden", isSwear);
+  $("#filters").classList.toggle("hidden", isSwear || isAssoc);
 
   if (isSong) renderSongs();
   else if (isText) renderTexts();
+  else if (isAssoc) renderAssoc();
   else renderVocab();
 
   updateCounts();
@@ -417,6 +463,72 @@ $("#songs").addEventListener("click", (e) => {
   }
   else if (act === "edit-song") { e.stopPropagation(); openSongDialog(id); }
   else if (act === "del-song") { e.stopPropagation(); if (confirm("Удалить песню?")) { if (ui.openSongId === id) ui.openSongId = null; deleteSong(id); } }
+});
+
+// ── Клики в разделе ассоциаций ───────────────────────────────────────
+$("#assoc").addEventListener("click", (e) => {
+  const actEl = e.target.closest("[data-act]");
+  if (!actEl) return;
+  const act = actEl.dataset.act;
+  const id = e.target.closest("[data-id]").dataset.id;
+
+  if (act === "open-assoc") openAssocViewer(id);
+  else if (act === "edit-assoc") { e.stopPropagation(); openAssocDialog(id); }
+  else if (act === "del-assoc") { e.stopPropagation(); if (confirm("Удалить эту картинку?")) deleteAssoc(id); }
+});
+
+// Картинка на весь экран
+const assocViewer = $("#assoc-viewer");
+
+function openAssocViewer(id) {
+  const a = getAssoc().find((x) => x.id === id);
+  if (!a) return;
+  const imgEl = $("#assoc-viewer-img");
+  imgEl.removeAttribute("src");
+  imgEl.alt = a.title;
+  $("#assoc-viewer-cap").textContent = a.note ? `${a.title} — ${a.note}` : a.title;
+  if (a.image) resolveAsset(imgEl, GITHUB.dirs.images, a.image, "image/jpeg");
+  assocViewer.showModal();
+}
+
+// тап по фону (не по самой картинке) закрывает просмотр
+assocViewer.addEventListener("click", (e) => {
+  if (!e.target.closest(".lightbox__img")) assocViewer.close();
+});
+
+// ── Диалог ассоциации ────────────────────────────────────────────────
+const assocDialog = $("#assoc-dialog");
+const assocForm = $("#assoc-form");
+let editingAssocId = null;
+
+function openAssocDialog(id = null) {
+  editingAssocId = id;
+  const title = $("#assoc-dialog-title");
+  if (id) {
+    const a = getAssoc().find((x) => x.id === id);
+    title.textContent = "Редактировать ассоциацию";
+    assocForm.title.value = a.title;
+    assocForm.image.value = a.image || "";
+    assocForm.note.value = a.note || "";
+  } else {
+    title.textContent = "Новая ассоциация";
+    assocForm.reset();
+  }
+  assocDialog.showModal();
+}
+
+assocForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const data = {
+    title: assocForm.title.value.trim(),
+    image: assocForm.image.value.trim(),
+    note: assocForm.note.value.trim(),
+  };
+  if (!data.title) return;
+  if (editingAssocId) updateAssoc(editingAssocId, data);
+  else addAssoc(data);
+  assocDialog.close();
+  toast(editingAssocId ? "Ассоциация сохранена" : "Ассоциация добавлена", "ok");
 });
 
 // ── Клики в разделе текстов ──────────────────────────────────────────
@@ -600,12 +712,14 @@ $("#btn-save-token").addEventListener("click", async () => {
 $("#btn-pull").addEventListener("click", async () => {
   try {
     toast("Загружаю из GitHub…");
-    const [{ words }, { songs }, { texts }] = await Promise.all([pullWords(), pullSongs(), pullTexts()]);
+    const [{ words }, { songs }, { texts }, { assoc }] =
+      await Promise.all([pullWords(), pullSongs(), pullTexts(), pullAssoc()]);
     if (words) setWords(words);
     if (songs) setSongs(songs);
     if (texts) setTexts(texts);
-    if (!words && !songs && !texts) { await checkAccess(); toast("Репозиторий доступен, но файлов данных в нём пока нет", "warn"); }
-    else toast(`Загружено: ${words ? words.length : 0} слов, ${songs ? songs.length : 0} песен, ${texts ? texts.length : 0} текстов`, "ok");
+    if (assoc) setAssoc(assoc);
+    if (!words && !songs && !texts && !assoc) { await checkAccess(); toast("Репозиторий доступен, но файлов данных в нём пока нет", "warn"); }
+    else toast(`Загружено: ${words ? words.length : 0} слов, ${songs ? songs.length : 0} песен, ${texts ? texts.length : 0} текстов, ${assoc ? assoc.length : 0} ассоциаций`, "ok");
     render();
     refreshSyncStatus();
   } catch (err) { toast(err.message, "err"); }
@@ -618,6 +732,7 @@ $("#btn-push").addEventListener("click", async () => {
       pushWords(getWords(), "Update words from app"),
       pushSongs(getSongs(), "Update songs from app"),
       pushTexts(getTexts(), "Update texts from app"),
+      pushAssoc(getAssoc(), "Update assoc from app"),
     ]);
     toast("Отправлено в GitHub", "ok");
     refreshSyncStatus();
@@ -647,6 +762,7 @@ function scheduleAutoPush() {
         pushWords(getWords(), "Auto-sync from app"),
         pushSongs(getSongs(), "Auto-sync from app"),
         pushTexts(getTexts(), "Auto-sync from app"),
+        pushAssoc(getAssoc(), "Auto-sync from app"),
       ]);
       refreshSyncStatus();
       setSyncStatus("saved");
@@ -684,6 +800,7 @@ $("#btn-edit").addEventListener("click", () => {
 $("#btn-add").addEventListener("click", () => {
   if (ui.section === "song") openSongDialog(null);
   else if (ui.section === "text") openTextDialog(null);
+  else if (ui.section === "assoc") openAssocDialog(null);
   else openWordDialog(null);
 });
 
@@ -858,9 +975,32 @@ document.addEventListener("click", (e) => {
 window.addEventListener("scroll", closeWordPop, { passive: true });
 
 // ── Инициализация ────────────────────────────────────────────────────
+
+// Кэш в localStorage «старше» текущей версии данных → один раз тянем свежее
+// из GitHub, чтобы после обновления списка не смотреть на старый.
+// Версию проставляем только после успешной загрузки, поэтому без токена
+// попытка просто повторится в следующий раз.
+async function syncIfStale() {
+  if (localStorage.getItem(KEYS.dataVer) === String(DATA_VERSION)) return;
+  if (!isConfigured()) return;
+  try {
+    const [{ words }, { songs }, { texts }, { assoc }] =
+      await Promise.all([pullWords(), pullSongs(), pullTexts(), pullAssoc()]);
+    if (words) setWords(words, { silent: true });
+    if (songs) setSongs(songs, { silent: true });
+    if (texts) setTexts(texts, { silent: true });
+    if (assoc) setAssoc(assoc, { silent: true });
+    localStorage.setItem(KEYS.dataVer, String(DATA_VERSION));
+  } catch (err) {
+    console.warn("first sync failed:", err.message);
+  }
+}
+
 async function init() {
   applyTheme(localStorage.getItem(KEYS.theme) || "dark");
   await loadInitial();
+  // до subscribe — чтобы обновление данных не улетело обратно автосохранением
+  await syncIfStale();
   subscribe(() => { render(); scheduleAutoPush(); });
   render();
   renderPlayerbar();

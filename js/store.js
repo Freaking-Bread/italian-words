@@ -5,6 +5,7 @@ import { KEYS, DATA_URL } from "./config.js";
 let words = [];
 let songs = [];
 let texts = [];
+let assoc = [];
 const listeners = new Set();
 
 function emit() {
@@ -21,6 +22,7 @@ export function subscribe(fn) {
 export function getWords() { return words; }
 export function getSongs() { return songs; }
 export function getTexts() { return texts; }
+export function getAssoc() { return assoc; }
 
 export function setWords(next, { silent = false } = {}) {
   words = Array.isArray(next) ? next : [];
@@ -34,11 +36,16 @@ export function setTexts(next, { silent = false } = {}) {
   texts = Array.isArray(next) ? next : [];
   silent ? persistLocal() : emit();
 }
+export function setAssoc(next, { silent = false } = {}) {
+  assoc = Array.isArray(next) ? next : [];
+  silent ? persistLocal() : emit();
+}
 
 function persistLocal() {
   localStorage.setItem(KEYS.words, JSON.stringify(words));
   localStorage.setItem(KEYS.songs, JSON.stringify(songs));
   localStorage.setItem(KEYS.texts, JSON.stringify(texts));
+  localStorage.setItem(KEYS.assoc, JSON.stringify(assoc));
 }
 
 // Первичная загрузка: сначала localStorage, иначе стартовые демо-файлы.
@@ -46,6 +53,7 @@ export async function loadInitial() {
   words = await loadPart(KEYS.words, DATA_URL.words);
   songs = await loadPart(KEYS.songs, DATA_URL.songs);
   texts = await loadPart(KEYS.texts, DATA_URL.texts);
+  assoc = await loadPart(KEYS.assoc, DATA_URL.assoc);
   persistLocal();
 }
 
@@ -130,5 +138,22 @@ export function updateText(id, patch) {
 }
 export function deleteText(id) {
   texts = texts.filter((t) => t.id !== id);
+  emit();
+}
+
+// ── Ассоциации (картинки-подсказки к словам) ─────────────────────────
+export function addAssoc({ title, image = "", note = "" }) {
+  const now = Date.now();
+  const item = { id: uid("a_"), title: title.trim(), image: image.trim(), note: note.trim(), createdAt: now, updatedAt: now };
+  assoc = [item, ...assoc];
+  emit();
+  return item;
+}
+export function updateAssoc(id, patch) {
+  assoc = assoc.map((a) => (a.id === id ? { ...a, ...patch, updatedAt: Date.now() } : a));
+  emit();
+}
+export function deleteAssoc(id) {
+  assoc = assoc.filter((a) => a.id !== id);
   emit();
 }

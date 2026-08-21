@@ -26,6 +26,8 @@
       <symbol id="ic-rule" viewBox="0 0 24 24"><path d="M3 17 9 5l6 12"/><path d="M5.5 13h7"/><path d="M17 8h4"/><path d="M19 6v11"/></symbol>
       <symbol id="ic-flame" viewBox="0 0 24 24"><path d="M12 3s5 4.5 5 9a5 5 0 0 1-10 0c0-1.5.7-2.8 1.5-3.7C9 10 10 11 10 12c0-3 2-6 2-9z"/></symbol>
       <symbol id="ic-note" viewBox="0 0 24 24"><path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
+      <symbol id="ic-image" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="8.5" cy="10" r="1.6"/><path d="m4 17 4.5-4.5 3.5 3.5 3-3L20 17"/></symbol>
+      <symbol id="ic-close" viewBox="0 0 24 24"><path d="m6 6 12 12"/><path d="M18 6 6 18"/></symbol>
       <symbol id="ic-scroll" viewBox="0 0 24 24"><path d="M6 4h12v14a2 2 0 0 0 2 2H8a2 2 0 0 1-2-2z"/><path d="M9 8h6"/><path d="M9 12h6"/></symbol>
       <symbol id="ic-play" viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z" fill="currentColor" stroke="none"/></symbol>
       <symbol id="ic-pause" viewBox="0 0 24 24"><rect x="6" y="4.5" width="4" height="15" rx="1.2" fill="currentColor" stroke="none"/><rect x="14" y="4.5" width="4" height="15" rx="1.2" fill="currentColor" stroke="none"/></symbol>
@@ -60,6 +62,7 @@
         <button class="tab is-active" data-section="word"><svg class="ic"><use href="#ic-book"/></svg><span class="tab__label">Слова</span><span class="tab__count" data-count="word">0</span></button>
         <button class="tab" data-section="linker"><svg class="ic"><use href="#ic-link"/></svg><span class="tab__label">Связки</span><span class="tab__count" data-count="linker">0</span></button>
         <button class="tab" data-section="rule"><svg class="ic"><use href="#ic-rule"/></svg><span class="tab__label">Правила</span><span class="tab__count" data-count="rule">0</span></button>
+        <button class="tab" data-section="assoc"><svg class="ic"><use href="#ic-image"/></svg><span class="tab__label">Ассоциации</span><span class="tab__count" data-count="assoc">0</span></button>
         <button class="tab" data-section="swear"><svg class="ic"><use href="#ic-flame"/></svg><span class="tab__label">Мат</span><span class="tab__count" data-count="swear">0</span></button>
         <button class="tab" data-section="song"><svg class="ic"><use href="#ic-note"/></svg><span class="tab__label">Песни</span><span class="tab__count" data-count="song">0</span></button>
         <button class="tab" data-section="text"><svg class="ic"><use href="#ic-scroll"/></svg><span class="tab__label">Тексты</span><span class="tab__count" data-count="text">0</span></button>
@@ -90,6 +93,10 @@
       <section id="songs" class="hidden">
         <div id="songs-list" class="songs-list"></div>
         <article id="song-view" class="song-view hidden"></article>
+      </section>
+
+      <section id="assoc" class="hidden">
+        <div id="assoc-list" class="assoc-list"></div>
       </section>
 
       <section id="texts" class="hidden">
@@ -222,6 +229,36 @@
           <button type="submit" class="btn btn--primary">Сохранить</button>
         </div>
       </form>
+    </dialog>
+
+    <!-- Модалка: ассоциация -->
+    <dialog id="assoc-dialog" class="dialog">
+      <form method="dialog" class="dialog__form" id="assoc-form">
+        <h2 id="assoc-dialog-title" class="dialog__title">Новая ассоциация</h2>
+        <label class="field">
+          <span>Название</span>
+          <input name="title" required placeholder="Ассоциации №4" />
+        </label>
+        <label class="field">
+          <span>Картинка: имя файла в repo/images или ссылка</span>
+          <input name="image" placeholder="assoc-4.jpg или https://…" />
+        </label>
+        <label class="field">
+          <span>Слова на картинке (для поиска)</span>
+          <textarea name="note" rows="2" placeholder="lupo mannaro · legno · pioggia…"></textarea>
+        </label>
+        <div class="dialog__actions">
+          <button type="button" class="btn btn--ghost" data-close>Отмена</button>
+          <button type="submit" class="btn btn--primary">Сохранить</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Просмотр картинки на весь экран -->
+    <dialog id="assoc-viewer" class="lightbox">
+      <button class="lightbox__close" data-close aria-label="Закрыть"><svg class="ic"><use href="#ic-close"/></svg></button>
+      <img id="assoc-viewer-img" class="lightbox__img" alt="" />
+      <p id="assoc-viewer-cap" class="lightbox__cap"></p>
     </dialog>
 
     <!-- Модалка: синхронизация с GitHub -->

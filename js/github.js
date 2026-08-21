@@ -116,6 +116,13 @@ export function pushSongs(songs, message = "Update songs") {
 export function pushTexts(texts, message = "Update texts") {
   return pushJson(GITHUB.paths.texts, KEYS.shaTexts, texts, message);
 }
+export async function pullAssoc() {
+  const { data } = await pullJson(GITHUB.paths.assoc, KEYS.shaAssoc);
+  return { assoc: data };
+}
+export function pushAssoc(assoc, message = "Update assoc") {
+  return pushJson(GITHUB.paths.assoc, KEYS.shaAssoc, assoc, message);
+}
 
 // ── Бинарные ассеты из приватного репо (mp3, картинки) ──────────────
 // Возвращает object URL, который можно подставить в <audio src> / <img src>.
