@@ -2,7 +2,7 @@
   {
     "id": "demo_ciao",
     "word": "Ciao",
-    "meaning": "привет / пока (демо-слово)",
+    "meaning": "привет / пока",
     "example": "Ciao, come stai oggi?",
     "exampleRu": "Привет, как ты сегодня?",
     "image": "",
@@ -14,7 +14,7 @@
   {
     "id": "demo_serendipita",
     "word": "la serendipità",
-    "meaning": "счастливая случайность (демо — нажми ☁️ и загрузи свои слова)",
+    "meaning": "счастливая случайность",
     "example": "Il nostro incontro è stato pura serendipità.",
     "exampleRu": "Наша встреча была чистой счастливой случайностью.",
     "image": "",
@@ -26,7 +26,7 @@
   {
     "id": "demo_addirittura",
     "word": "addirittura",
-    "meaning": "даже, прямо-таки (демо-слово)",
+    "meaning": "даже, прямо-таки",
     "example": "Ha imparato l'italiano in un mese, addirittura!",
     "exampleRu": "Он выучил итальянский за месяц, прямо-таки!",
     "image": "",
@@ -38,7 +38,7 @@
   {
     "id": "demo_linker_quindi",
     "word": "quindi",
-    "meaning": "следовательно, поэтому (демо-связка)",
+    "meaning": "следовательно, поэтому",
     "example": "Piove, quindi restiamo a casa.",
     "exampleRu": "Идёт дождь, поэтому остаёмся дома.",
     "image": "",
@@ -49,7 +49,7 @@
   },
   {
     "id": "demo_rule_articoli",
-    "word": "Определённый артикль зависит от рода и первой буквы слова: il / lo / la / l' (ед.), i / gli / le (мн.). Демо-правило — сюда можно добавлять и картинки.",
+    "word": "Определённый артикль зависит от рода и первой буквы слова: il / lo / la / l' в единственном числе, i / gli / le во множественном.",
     "meaning": "",
     "example": "",
     "exampleRu": "",
@@ -62,7 +62,7 @@
   {
     "id": "demo_swear_cavolo",
     "word": "Che cavolo",
-    "meaning": "какого чёрта, что за фигня (демо — реальный список загрузи через ☁️)",
+    "meaning": "какого чёрта, что за фигня",
     "example": "Che cavolo stai dicendo?",
     "exampleRu": "Что за фигню ты несёшь?",
     "image": "",

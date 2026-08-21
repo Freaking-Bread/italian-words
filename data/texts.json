@@ -1,8 +1,8 @@
 [
   {
     "id": "demo_text",
-    "title": "Testo di prova (демо)",
-    "body": "Questo è un testo di esempio da imparare a memoria.\nQui va il tuo testo in italiano, senza traduzione.\n\nUna riga vuota crea un nuovo paragrafo. Premi 🔊 in alto per ascoltarlo.",
+    "title": "La mia giornata",
+    "body": "Ogni giorno mi sveglio alle otto. Rimango a letto per qualche minuto, poi vado in cucina e preparo il caffè.\n\nEsco di casa verso le nove. La strada è sempre la stessa, ma la mattina cambia colore ogni volta.\n\nLa sera torno tardi. Mi siedo, ascolto una canzone e non penso a niente.",
     "createdAt": 1,
     "updatedAt": 1
   }

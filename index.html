@@ -3,32 +3,66 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0b0d12" />
+    <meta name="theme-color" content="#08090c" />
     <title>Il mio italiano · Мой итальянский</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 3 2'><rect width='1' height='2' x='0' fill='%23008C45'/><rect width='1' height='2' x='1' fill='%23F4F5F0'/><rect width='1' height='2' x='2' fill='%23CD212A'/></svg>" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="css/styles.css" />
   </head>
   <body>
-    <div class="bg-glow" aria-hidden="true"></div>
+    <!-- Живой mesh-градиент на фоне -->
+    <div class="mesh" aria-hidden="true">
+      <span class="mesh__blob mesh__blob--1"></span>
+      <span class="mesh__blob mesh__blob--2"></span>
+      <span class="mesh__blob mesh__blob--3"></span>
+    </div>
+
+    <!-- Иконки (спрайт) -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <symbol id="ic-book" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20"/></symbol>
+      <symbol id="ic-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19"/></symbol>
+      <symbol id="ic-rule" viewBox="0 0 24 24"><path d="M3 17 9 5l6 12"/><path d="M5.5 13h7"/><path d="M17 8h4"/><path d="M19 6v11"/></symbol>
+      <symbol id="ic-flame" viewBox="0 0 24 24"><path d="M12 3s5 4.5 5 9a5 5 0 0 1-10 0c0-1.5.7-2.8 1.5-3.7C9 10 10 11 10 12c0-3 2-6 2-9z"/></symbol>
+      <symbol id="ic-note" viewBox="0 0 24 24"><path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
+      <symbol id="ic-scroll" viewBox="0 0 24 24"><path d="M6 4h12v14a2 2 0 0 0 2 2H8a2 2 0 0 1-2-2z"/><path d="M9 8h6"/><path d="M9 12h6"/></symbol>
+      <symbol id="ic-play" viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="ic-pause" viewBox="0 0 24 24"><rect x="6" y="4.5" width="4" height="15" rx="1.2" fill="currentColor" stroke="none"/><rect x="14" y="4.5" width="4" height="15" rx="1.2" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="ic-prev" viewBox="0 0 24 24"><path d="M18 5.5v13L8 12z" fill="currentColor" stroke="none"/><rect x="4" y="5.5" width="2.6" height="13" rx="1.1" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="ic-next" viewBox="0 0 24 24"><path d="M6 5.5v13L16 12z" fill="currentColor" stroke="none"/><rect x="17.4" y="5.5" width="2.6" height="13" rx="1.1" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="ic-loop" viewBox="0 0 24 24"><path d="M4 9a4 4 0 0 1 4-4h9"/><path d="m14.5 2.5 2.5 2.5-2.5 2.5"/><path d="M20 15a4 4 0 0 1-4 4H7"/><path d="M9.5 21.5 7 19l2.5-2.5"/></symbol>
+      <symbol id="ic-shuffle" viewBox="0 0 24 24"><path d="M3 6h3.5c1.4 0 2.6.8 3.3 2l4.4 8c.7 1.2 1.9 2 3.3 2H21"/><path d="M3 18h3.5c1.4 0 2.6-.8 3.3-2"/><path d="M14.2 8c.7-1.2 1.9-2 3.3-2H21"/><path d="m18.5 3.5 2.5 2.5-2.5 2.5"/><path d="m18.5 15.5 2.5 2.5-2.5 2.5"/></symbol>
+      <symbol id="ic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.2"/><path d="M12 19.8V22"/><path d="M2 12h2.2"/><path d="M19.8 12H22"/><path d="m4.9 4.9 1.6 1.6"/><path d="m17.5 17.5 1.6 1.6"/><path d="m19.1 4.9-1.6 1.6"/><path d="m6.5 17.5-1.6 1.6"/></symbol>
+      <symbol id="ic-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.2 8.2 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/></symbol>
+      <symbol id="ic-cloud" viewBox="0 0 24 24"><path d="M7 18a4 4 0 0 1-.4-8A6 6 0 0 1 18 9.5a4.25 4.25 0 0 1-.5 8.5z"/></symbol>
+      <symbol id="ic-pencil" viewBox="0 0 24 24"><path d="M4 20h4L20 8a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m14.5 5.5 4 4"/></symbol>
+      <symbol id="ic-speak" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z"/><path d="M15.5 9.2a4 4 0 0 1 0 5.6"/><path d="M18.3 6.5a8 8 0 0 1 0 11"/></symbol>
+      <symbol id="ic-plus" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></symbol>
+      <symbol id="ic-back" viewBox="0 0 24 24"><path d="M15 5 8 12l7 7"/></symbol>
+      <symbol id="ic-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="m6 7 1 13h10l1-13"/></symbol>
+      <symbol id="ic-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+      <symbol id="ic-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7"/></symbol>
+      <symbol id="ic-ext" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+    </svg>
 
     <header class="appbar">
       <div class="appbar__row">
-        <h1 class="appbar__title"><span class="tricolore" aria-hidden="true"></span> Il&nbsp;mio&nbsp;italiano</h1>
+        <h1 class="appbar__title"><span class="tricolore" aria-hidden="true"></span><span class="appbar__name">Il&nbsp;mio&nbsp;italiano</span></h1>
         <div class="appbar__actions">
-          <button id="btn-theme" class="icon-btn" title="Тема" aria-label="Сменить тему">☀️</button>
-          <button id="btn-sync" class="icon-btn" title="Синхронизация" aria-label="Синхронизация">☁️</button>
-          <button id="btn-edit" class="icon-btn" title="Режим редактирования" aria-label="Режим редактирования">✏️</button>
+          <button id="btn-theme" class="icon-btn" title="Тема" aria-label="Сменить тему"><svg class="ic"><use href="#ic-sun"/></svg></button>
+          <button id="btn-sync" class="icon-btn" title="Синхронизация" aria-label="Синхронизация"><svg class="ic"><use href="#ic-cloud"/></svg></button>
+          <button id="btn-edit" class="icon-btn" title="Режим редактирования" aria-label="Режим редактирования"><svg class="ic"><use href="#ic-pencil"/></svg></button>
         </div>
       </div>
 
       <nav class="tabs" id="tabs">
-        <button class="tab is-active" data-section="word"><span class="tab__ic">📖</span><span class="tab__label">Слова</span><span class="tab__count" data-count="word">0</span></button>
-        <button class="tab" data-section="linker"><span class="tab__ic">🔗</span><span class="tab__label">Связки</span><span class="tab__count" data-count="linker">0</span></button>
-        <button class="tab" data-section="rule"><span class="tab__ic">📐</span><span class="tab__label">Правила</span><span class="tab__count" data-count="rule">0</span></button>
-        <button class="tab" data-section="swear"><span class="tab__ic">🤬</span><span class="tab__label">Мат</span><span class="tab__count" data-count="swear">0</span></button>
-        <button class="tab" data-section="song"><span class="tab__ic">🎵</span><span class="tab__label">Песни</span><span class="tab__count" data-count="song">0</span></button>
-        <button class="tab" data-section="text"><span class="tab__ic">📜</span><span class="tab__label">Тексты</span><span class="tab__count" data-count="text">0</span></button>
+        <button class="tab is-active" data-section="word"><svg class="ic"><use href="#ic-book"/></svg><span class="tab__label">Слова</span><span class="tab__count" data-count="word">0</span></button>
+        <button class="tab" data-section="linker"><svg class="ic"><use href="#ic-link"/></svg><span class="tab__label">Связки</span><span class="tab__count" data-count="linker">0</span></button>
+        <button class="tab" data-section="rule"><svg class="ic"><use href="#ic-rule"/></svg><span class="tab__label">Правила</span><span class="tab__count" data-count="rule">0</span></button>
+        <button class="tab" data-section="swear"><svg class="ic"><use href="#ic-flame"/></svg><span class="tab__label">Мат</span><span class="tab__count" data-count="swear">0</span></button>
+        <button class="tab" data-section="song"><svg class="ic"><use href="#ic-note"/></svg><span class="tab__label">Песни</span><span class="tab__count" data-count="song">0</span></button>
+        <button class="tab" data-section="text"><svg class="ic"><use href="#ic-scroll"/></svg><span class="tab__label">Тексты</span><span class="tab__count" data-count="text">0</span></button>
       </nav>
 
       <!-- Инструменты для словаря/связок/правил -->
@@ -38,7 +72,10 @@
           <span id="progress-text" class="progress__text">0 / 0</span>
         </div>
         <div class="appbar__row appbar__tools">
-          <input id="search" class="search" type="search" placeholder="Поиск слова или перевода…" autocomplete="off" />
+          <div class="search-wrap">
+            <svg class="ic search-wrap__ic"><use href="#ic-search"/></svg>
+            <input id="search" class="search" type="search" placeholder="Поиск слова или перевода…" autocomplete="off" />
+          </div>
           <div class="chips" id="filters">
             <button class="chip is-active" data-filter="learning">Учу</button>
             <button class="chip" data-filter="learned">Выучено</button>
@@ -48,16 +85,13 @@
     </header>
 
     <main class="container">
-      <!-- Сетка карточек (слова / связки / правила) -->
       <div id="grid" class="grid" aria-live="polite"></div>
 
-      <!-- Раздел «Песни»: список + просмотр одной песни -->
       <section id="songs" class="hidden">
         <div id="songs-list" class="songs-list"></div>
         <article id="song-view" class="song-view hidden"></article>
       </section>
 
-      <!-- Раздел «Тексты»: список + чтение одного текста -->
       <section id="texts" class="hidden">
         <div id="texts-list" class="texts-list"></div>
         <article id="text-view" class="text-view hidden"></article>
@@ -66,7 +100,43 @@
       <p id="empty" class="empty hidden">Здесь пока пусто 🤔</p>
     </main>
 
-    <button id="btn-add" class="fab" title="Добавить" aria-label="Добавить">＋</button>
+    <button id="btn-add" class="fab" title="Добавить" aria-label="Добавить"><svg class="ic"><use href="#ic-plus"/></svg></button>
+
+    <!-- Нижний плеер: живёт поверх всех вкладок -->
+    <div id="playerbar" class="playerbar is-hidden">
+      <div class="playerbar__inner">
+        <div class="playerbar__art">
+          <svg class="ic"><use href="#ic-note"/></svg>
+          <span class="playerbar__eq" aria-hidden="true"><i></i><i></i><i></i></span>
+        </div>
+        <div class="playerbar__meta" id="pb-meta">
+          <p class="playerbar__title" id="pb-title">—</p>
+          <p class="playerbar__artist" id="pb-artist"></p>
+        </div>
+        <div class="playerbar__controls">
+          <button class="pb-btn" data-p="prev" title="Предыдущая" aria-label="Предыдущая"><svg class="ic"><use href="#ic-prev"/></svg></button>
+          <button class="pb-btn pb-btn--play" data-p="play" title="Играть" aria-label="Играть"><svg class="ic"><use href="#ic-play"/></svg></button>
+          <button class="pb-btn" data-p="next" title="Следующая" aria-label="Следующая"><svg class="ic"><use href="#ic-next"/></svg></button>
+        </div>
+        <div class="playerbar__seek">
+          <span class="playerbar__time" id="pb-cur">0:00</span>
+          <input id="pb-seek" class="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Перемотка" />
+          <span class="playerbar__time" id="pb-dur">0:00</span>
+        </div>
+        <div class="playerbar__toggles">
+          <button class="pb-btn pb-btn--toggle" data-p="loop" title="Повторять эту песню" aria-label="Повторять песню"><svg class="ic"><use href="#ic-loop"/></svg></button>
+          <button class="pb-btn pb-btn--toggle is-on" data-p="shuffle" title="Дальше — случайная песня" aria-label="Случайная следующая"><svg class="ic"><use href="#ic-shuffle"/></svg></button>
+        </div>
+      </div>
+      <audio id="audio" preload="none"></audio>
+    </div>
+
+    <!-- Мини-поповер «добавить слово в словарь» -->
+    <div id="wordpop" class="wordpop is-hidden">
+      <span class="wordpop__word" id="wordpop-word"></span>
+      <button class="wordpop__btn" id="wordpop-speak" title="Произнести"><svg class="ic"><use href="#ic-speak"/></svg></button>
+      <button class="wordpop__btn wordpop__btn--main" id="wordpop-add"><svg class="ic"><use href="#ic-plus"/></svg>В словарь</button>
+    </div>
 
     <!-- Модалка: слово / связка / правило -->
     <dialog id="word-dialog" class="dialog">
@@ -119,15 +189,15 @@
         </label>
         <div class="field-row">
           <label class="field">
-            <span>Текст (по-итальянски) — строка = строка</span>
+            <span>Текст (по-итальянски)</span>
             <textarea name="lyricsIt" rows="8" placeholder="Penso che un sogno così…&#10;non ritorni mai più…"></textarea>
           </label>
           <label class="field">
-            <span>Перевод (по-русски) — построчно</span>
+            <span>Перевод (по-русски)</span>
             <textarea name="lyricsRu" rows="8" placeholder="Думаю, что такой сон…&#10;больше никогда не вернётся…"></textarea>
           </label>
         </div>
-        <small class="hint">Слева и справа должно быть одинаковое число строк — они сопоставляются построчно.</small>
+        <small class="hint">Строки сопоставляются построчно, пустая строка = новый куплет. На странице песни куплет показывается двумя колонками: слева итальянский, справа перевод.</small>
         <div class="dialog__actions">
           <button type="button" class="btn btn--ghost" data-close>Отмена</button>
           <button type="submit" class="btn btn--primary">Сохранить</button>
@@ -157,7 +227,7 @@
     <!-- Модалка: синхронизация с GitHub -->
     <dialog id="sync-dialog" class="dialog">
       <div class="dialog__form">
-        <h2 class="dialog__title">☁️ Синхронизация</h2>
+        <h2 class="dialog__title">Синхронизация</h2>
         <p class="muted" id="sync-status">Токен не задан — работаешь локально.</p>
         <label class="field">
           <span>GitHub Personal Access Token</span>
@@ -165,8 +235,8 @@
           <small class="hint">Хранится только в этом браузере. Нужен доступ <code>Contents: read/write</code> к приватному репозиторию данных.</small>
         </label>
         <div class="sync-buttons">
-          <button class="btn btn--ghost" id="btn-pull">⬇️ Загрузить из GitHub</button>
-          <button class="btn btn--primary" id="btn-push">⬆️ Отправить в GitHub</button>
+          <button class="btn btn--ghost" id="btn-pull">Загрузить из GitHub</button>
+          <button class="btn btn--primary" id="btn-push">Отправить в GitHub</button>
         </div>
         <div class="dialog__actions">
           <button type="button" class="btn btn--ghost" data-close>Закрыть</button>

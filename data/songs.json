@@ -1,15 +1,66 @@
 [
   {
-    "id": "demo_song",
-    "title": "Демо-песня",
-    "artist": "Пример (замени своими песнями)",
+    "id": "demo_caffe",
+    "title": "Il caffè della mattina",
+    "artist": "Demo",
     "audio": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     "lyrics": [
-      { "it": "Questa è una canzone di prova.", "ru": "Это пробная песня." },
-      { "it": "A sinistra il testo in italiano,", "ru": "Слева — текст по-итальянски," },
-      { "it": "a destra la traduzione in russo.", "ru": "справа — перевод на русский." },
-      { "it": "", "ru": "" },
-      { "it": "Premi ▶ in alto per ascoltare.", "ru": "Нажми ▶ сверху, чтобы послушать." }
+      {
+        "it": "La mattina si alza piano,",
+        "ru": "Утро поднимается медленно,"
+      },
+      {
+        "it": "il vapore sulla mano,",
+        "ru": "пар оседает на руке,"
+      },
+      {
+        "it": "una tazza, niente fretta,",
+        "ru": "одна чашка, никакой спешки,"
+      },
+      {
+        "it": "la città che ancora aspetta.",
+        "ru": "город, который ещё ждёт."
+      },
+      {
+        "it": "",
+        "ru": ""
+      },
+      {
+        "it": "Bevo piano, penso a te,",
+        "ru": "Пью медленно, думаю о тебе,"
+      },
+      {
+        "it": "il rumore del caffè",
+        "ru": "шум кофе —"
+      },
+      {
+        "it": "è l'unica canzone",
+        "ru": "единственная песня,"
+      },
+      {
+        "it": "che conosco a memoria.",
+        "ru": "которую я знаю наизусть."
+      },
+      {
+        "it": "",
+        "ru": ""
+      },
+      {
+        "it": "Fuori piove sulle strade,",
+        "ru": "На улице дождь,"
+      },
+      {
+        "it": "dentro il tempo non ci bada,",
+        "ru": "внутри время не обращает внимания,"
+      },
+      {
+        "it": "resto qui ancora un minuto",
+        "ru": "останусь здесь ещё минуту,"
+      },
+      {
+        "it": "prima di dire «buongiorno».",
+        "ru": "прежде чем сказать «доброе утро»."
+      }
     ],
     "createdAt": 1,
     "updatedAt": 1

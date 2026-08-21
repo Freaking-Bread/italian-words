@@ -10,6 +10,14 @@ import {
   pullWords, pullSongs, pullTexts, pushWords, pushSongs, pushTexts,
   getToken, setToken, isConfigured, checkAccess, assetUrl,
 } from "./github.js";
+import {
+  play as playSong, toggle as togglePlay, next as nextSong, prev as prevSong,
+  playRandom, setLoop, setShuffle, seekTo, onPlayerChange, playerState,
+  currentSong, audioEl, hues, fmtTime,
+} from "./player.js";
+
+// Иконка из спрайта
+const icon = (name, cls = "ic") => `<svg class="${cls}"><use href="#ic-${name}"/></svg>`;
 
 const SECTION_LABEL = { word: "слово", linker: "связку", rule: "правило", swear: "ругательство", song: "песню", text: "текст" };
 
@@ -26,6 +34,14 @@ function toast(msg, type = "") {
   t.className = "toast is-visible " + type;
   clearTimeout(toast._t);
   toast._t = setTimeout(() => (t.className = "toast"), 2600);
+}
+
+// 1 строка / 2 строки / 5 строк
+function plural(n, one, few, many) {
+  const n10 = n % 10, n100 = n % 100;
+  if (n10 === 1 && n100 !== 11) return one;
+  if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return few;
+  return many;
 }
 
 function esc(s = "") {
@@ -108,7 +124,7 @@ function cardHtml(w) {
     ? `<p class="card__rule">${esc(w.word)}</p>`
     : `<div class="card__word-row">
          <h3 class="card__word">${esc(w.word)}</h3>
-         <button class="mini-btn" data-act="speak" title="Произнести">🔊</button>
+         <button class="mini-btn" data-act="speak" title="Произнести" aria-label="Произнести">${icon("speak")}</button>
        </div>`;
 
   const meaning = w.meaning
@@ -125,18 +141,18 @@ function cardHtml(w) {
     : "";
 
   const media = isRule ? "" :
-    `<a class="tag-btn" href="${reversoUrl(w.word)}" target="_blank" rel="noopener" title="Примеры в контексте">📚 Примеры</a>
-     <a class="tag-btn" href="${youglishUrl(w.word)}" target="_blank" rel="noopener" title="Произношение из видео">🗣 YouGlish</a>`;
+    `<a class="tag-btn" href="${reversoUrl(w.word)}" target="_blank" rel="noopener" title="Примеры в контексте">${icon("book")} Примеры</a>
+     <a class="tag-btn" href="${youglishUrl(w.word)}" target="_blank" rel="noopener" title="Произношение из видео">${icon("ext")} YouGlish</a>`;
 
   const editBtns = ui.editMode
-    ? `<button class="tag-btn tag-btn--edit" data-act="edit">✏️ Правка</button>
-       <button class="tag-btn tag-btn--del" data-act="delete">🗑</button>`
+    ? `<button class="tag-btn tag-btn--edit" data-act="edit">${icon("pencil")} Правка</button>
+       <button class="tag-btn tag-btn--del" data-act="delete" aria-label="Удалить">${icon("trash")}</button>`
     : "";
 
   const actions = media || editBtns ? `<div class="card__actions">${media}${editBtns}</div>` : "";
 
   const check = isSwear ? "" :
-    `<button class="card__check" data-act="learned" title="Отметить как выученное" aria-pressed="${w.learned}">${w.learned ? "✓" : ""}</button>`;
+    `<button class="card__check" data-act="learned" title="Отметить как выученное" aria-pressed="${w.learned}">${w.learned ? icon("check") : ""}</button>`;
 
   return `
     <article class="card card--${cat} ${learnedCls}" data-id="${w.id}">
@@ -169,50 +185,94 @@ function renderVocab() {
 }
 
 // ── Раздел «Песни» ───────────────────────────────────────────────────
+
+// Стиль «обложки» — два оттенка, выведенные из названия песни.
+function artStyle(s) {
+  const { h1, h2 } = hues(s.title + (s.artist || ""));
+  return `--h1:${h1};--h2:${h2}`;
+}
+
 function songCardHtml(s) {
+  const playing = playerState().id === s.id;
   const editBtns = ui.editMode
-    ? `<div class="card__actions" style="margin-left:auto">
-         <button class="tag-btn tag-btn--edit" data-act="edit-song">✏️</button>
-         <button class="tag-btn tag-btn--del" data-act="del-song">🗑</button>
+    ? `<div class="song-card__tools">
+         <button class="tag-btn tag-btn--edit" data-act="edit-song" aria-label="Правка">${icon("pencil")}</button>
+         <button class="tag-btn tag-btn--del" data-act="del-song" aria-label="Удалить">${icon("trash")}</button>
        </div>` : "";
+  const lineCount = (s.lyrics || []).filter((l) => l.it).length;
+  const lineWord = plural(lineCount, "строка", "строки", "строк");
   return `
-    <div class="song-card" data-id="${s.id}" data-act="open-song">
-      <div class="song-card__disc">🎵</div>
+    <div class="song-card ${playing ? "is-playing" : ""}" data-id="${s.id}" data-act="open-song">
+      ${editBtns}
+      <div class="song-card__art" style="${artStyle(s)}">
+        ${icon("note")}
+        ${s.audio ? `<button class="song-card__play" data-act="play-song" aria-label="Слушать">${icon(playing && playerState().playing ? "pause" : "play")}</button>` : ""}
+      </div>
       <div class="song-card__meta">
         <h3 class="song-card__title">${esc(s.title)}</h3>
         <p class="song-card__artist">${esc(s.artist || "—")}</p>
+        <p class="song-card__badge">${icon("scroll")} ${lineCount} ${lineWord}</p>
       </div>
-      ${editBtns}
     </div>`;
 }
 
+// Разбить построчный текст на куплеты: пустая строка = граница куплета.
+function toStanzas(lyrics = []) {
+  const stanzas = [];
+  let cur = { it: [], ru: [] };
+  for (const l of lyrics) {
+    if (!l.it && !l.ru) {
+      if (cur.it.length || cur.ru.length) stanzas.push(cur);
+      cur = { it: [], ru: [] };
+      continue;
+    }
+    if (l.it) cur.it.push(l.it);
+    if (l.ru) cur.ru.push(l.ru);
+  }
+  if (cur.it.length || cur.ru.length) stanzas.push(cur);
+  return stanzas;
+}
+
+// Итальянский текст → слова в <span>, чтобы по ним можно было кликнуть.
+function clickableWords(text) {
+  return esc(text).replace(/[A-Za-zÀ-ÿ’']+/g, (w) => `<span class="w">${w}</span>`);
+}
+
 function songViewHtml(s) {
-  const lines = (s.lyrics || []).map((l) => {
-    const emptyLine = !l.it && !l.ru;
-    return `<div class="lyric-line ${emptyLine ? "is-empty" : ""}">
-        <div class="lyric-it">${esc(l.it || "")}</div>
-        <div class="lyric-ru">${esc(l.ru || "")}</div>
-      </div>`;
-  }).join("");
+  const stanzas = toStanzas(s.lyrics).map((st) => `
+    <div class="stanza">
+      <p class="stanza__it">${st.it.map((l) => `<span class="ln">${clickableWords(l)}</span>`).join("")}</p>
+      <p class="stanza__ru" lang="ru">${st.ru.map((l) => `<span class="ln">${esc(l)}</span>`).join("")}</p>
+    </div>`).join("");
 
-  const player = s.audio
-    ? `<div class="player"><audio id="song-audio" controls preload="none"></audio></div>`
-    : `<div class="player"><p class="player__hint">🔇 Аудио не задано. Добавь mp3 в режиме ✏️.</p></div>`;
+  const st = playerState();
+  const isThis = st.id === s.id;
+  const playLabel = isThis && st.playing ? "Пауза" : "Слушать";
 
-  const noTokenHint = s.audio && !isUrl(s.audio) && !isConfigured()
-    ? `<p class="player__hint">Чтобы слушать mp3 из приватного репо — открой ☁️ и вставь токен.</p>` : "";
+  const playBtn = s.audio
+    ? `<button class="btn-play" data-act="play-song">${icon(isThis && st.playing ? "pause" : "play")} ${playLabel}</button>`
+    : "";
+  const randomBtn = `<button class="back-btn" data-act="random-song">${icon("shuffle")} Случайная песня</button>`;
+
+  let note = "";
+  if (!s.audio) note = `<p class="player-note">Без аудио</p>`;
+  else if (!isUrl(s.audio) && !isConfigured()) note = `<p class="player-note">Нужен токен, чтобы слушать</p>`;
 
   return `
-    <div class="song-view__top">
-      <button class="song-back" data-act="close-song">← Все песни</button>
+    <div class="view-top">
+      <button class="back-btn" data-act="close-song">${icon("back")} Все песни</button>
     </div>
-    <div class="song-view__head">
-      <h2 class="song-view__title">${esc(s.title)}</h2>
-      <p class="song-view__artist">${esc(s.artist || "")}</p>
+    <div class="song-hero">
+      <div class="song-hero__art" style="${artStyle(s)}">${icon("note")}</div>
+      <div class="song-hero__meta">
+        <p class="song-hero__kicker">Песня</p>
+        <h2 class="song-hero__title">${esc(s.title)}</h2>
+        <p class="song-hero__artist">${esc(s.artist || "")}</p>
+        <div class="song-hero__actions">${playBtn}${randomBtn}</div>
+      </div>
     </div>
-    ${player}
-    ${noTokenHint}
-    <div class="lyrics">${lines || '<p class="empty">Текст ещё не добавлен.</p>'}</div>`;
+    ${note}
+    <div class="stanzas">${stanzas || '<p class="empty">Текст ещё не добавлен.</p>'}</div>`;
 }
 
 function renderSongs() {
@@ -225,9 +285,6 @@ function renderSongs() {
     viewEl.classList.remove("hidden");
     viewEl.innerHTML = songViewHtml(song);
     empty.classList.add("hidden");
-    // подгрузить аудио
-    const audio = $("#song-audio", viewEl);
-    if (audio && song.audio) resolveAsset(audio, GITHUB.dirs.audio, song.audio, "audio/mpeg");
   } else {
     viewEl.classList.add("hidden");
     listEl.classList.remove("hidden");
@@ -242,8 +299,8 @@ function textCardHtml(t) {
   const preview = (t.body || "").replace(/\n+/g, " ").slice(0, 90);
   const editBtns = ui.editMode
     ? `<div class="card__actions" style="margin-left:auto">
-         <button class="tag-btn tag-btn--edit" data-act="edit-text">✏️</button>
-         <button class="tag-btn tag-btn--del" data-act="del-text">🗑</button>
+         <button class="tag-btn tag-btn--edit" data-act="edit-text" aria-label="Правка">${icon("pencil")}</button>
+         <button class="tag-btn tag-btn--del" data-act="del-text" aria-label="Удалить">${icon("trash")}</button>
        </div>` : "";
   return `
     <div class="text-card" data-id="${t.id}" data-act="open-text">
@@ -265,13 +322,11 @@ function bodyToHtml(body = "") {
 
 function textViewHtml(t) {
   return `
-    <div class="song-view__top">
-      <button class="song-back" data-act="close-text">← Все тексты</button>
-      <button class="tag-btn" data-act="speak-text" title="Озвучить">🔊 Озвучить</button>
+    <div class="view-top">
+      <button class="back-btn" data-act="close-text">${icon("back")} Все тексты</button>
+      <button class="back-btn" data-act="speak-text" title="Озвучить">${icon("speak")} Озвучить</button>
     </div>
-    <div class="text-view__head">
-      <h2 class="text-view__title">${esc(t.title)}</h2>
-    </div>
+    <h2 class="text-view__title">${esc(t.title)}</h2>
     <div class="text-body">${bodyToHtml(t.body) || '<p class="empty">Текст пуст.</p>'}</div>`;
 }
 
@@ -323,7 +378,9 @@ function render() {
   else renderVocab();
 
   updateCounts();
+  closeWordPop();
   document.body.classList.toggle("edit-mode", ui.editMode);
+  document.body.classList.toggle("song-open", isSong);
 }
 
 // ── Клики по сетке слов ──────────────────────────────────────────────
@@ -340,14 +397,24 @@ grid.addEventListener("click", (e) => {
 
 // ── Клики в разделе песен ────────────────────────────────────────────
 $("#songs").addEventListener("click", (e) => {
+  // клик по слову в тексте песни → поповер «в словарь»
+  const wordEl = e.target.closest(".w");
+  if (wordEl) { openWordPop(wordEl); return; }
+
   const actEl = e.target.closest("[data-act]");
-  if (!actEl) return;
+  if (!actEl) { closeWordPop(); return; }
   const act = actEl.dataset.act;
   const cardEl = e.target.closest("[data-id]");
   const id = cardEl ? cardEl.dataset.id : ui.openSongId;
 
-  if (act === "open-song") { ui.openSongId = id; render(); window.scrollTo({ top: 0 }); }
+  if (act === "open-song") { ui.openSongId = id; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
   else if (act === "close-song") { ui.openSongId = null; render(); }
+  else if (act === "play-song") { e.stopPropagation(); playSong(id); }
+  else if (act === "random-song") {
+    const s = playRandom();
+    if (s) { ui.openSongId = s.id; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+    else toast("Нет ни одной песни с mp3", "warn");
+  }
   else if (act === "edit-song") { e.stopPropagation(); openSongDialog(id); }
   else if (act === "del-song") { e.stopPropagation(); if (confirm("Удалить песню?")) { if (ui.openSongId === id) ui.openSongId = null; deleteSong(id); } }
 });
@@ -371,6 +438,9 @@ $("#texts").addEventListener("click", (e) => {
 const wordDialog = $("#word-dialog");
 const wordForm = $("#word-form");
 let editingId = null;
+// Куда класть новую карточку, если открыли диалог не со «словарной» вкладки
+// (например, кликнув по слову в тексте песни).
+let pendingCategory = null;
 
 function configureWordDialog(category) {
   const isRule = category === "rule";
@@ -385,6 +455,7 @@ function configureWordDialog(category) {
 
 function openWordDialog(id = null) {
   editingId = id;
+  pendingCategory = null;
   const title = $("#word-dialog-title");
   const category = id ? (getWords().find((x) => x.id === id).category || "word") : ui.section;
   configureWordDialog(category);
@@ -415,9 +486,11 @@ wordForm.addEventListener("submit", (e) => {
   };
   if (!data.word) return;
   if (editingId) updateWord(editingId, data);
-  else addWord({ ...data, category: ui.section });
+  else addWord({ ...data, category: pendingCategory || ui.section });
+  const wasFromSong = pendingCategory && ui.section === "song";
+  pendingCategory = null;
   wordDialog.close();
-  toast(editingId ? "Сохранено" : "Добавлено", "ok");
+  toast(editingId ? "Сохранено" : wasFromSong ? `«${data.word}» → в словарь` : "Добавлено", "ok");
 });
 
 // ── Диалог песни ─────────────────────────────────────────────────────
@@ -626,13 +699,163 @@ document.querySelectorAll("[data-close]").forEach((b) =>
 // Тема (дефолт — тёмная)
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
-  $("#btn-theme").textContent = theme === "dark" ? "☀️" : "🌙";
-  document.querySelector('meta[name="theme-color"]').setAttribute("content", theme === "dark" ? "#0b0d12" : "#f4f6fb");
+  $("#btn-theme").innerHTML = icon(theme === "dark" ? "sun" : "moon");
+  document.querySelector('meta[name="theme-color"]').setAttribute("content", theme === "dark" ? "#08090c" : "#f6f7fb");
   localStorage.setItem(KEYS.theme, theme);
 }
 $("#btn-theme").addEventListener("click", () => {
   applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
 });
+
+// ── Нижний плеер ─────────────────────────────────────────────────────
+const pb = $("#playerbar");
+const seekEl = $("#pb-seek");
+let seeking = false;
+
+function renderPlayerbar() {
+  const st = playerState();
+  const song = currentSong();
+
+  pb.classList.toggle("is-hidden", !song);
+  document.body.classList.toggle("has-player", !!song);
+  document.body.classList.toggle("is-playing", st.playing);
+  if (!song) return;
+
+  $("#pb-title").textContent = song.title;
+  $("#pb-artist").textContent = song.artist || "";
+  const { h1, h2 } = hues(song.title + (song.artist || ""));
+  const art = pb.querySelector(".playerbar__art");
+  art.style.setProperty("--h1", h1);
+  art.style.setProperty("--h2", h2);
+
+  pb.querySelector('[data-p="play"]').innerHTML = icon(st.playing ? "pause" : "play");
+  pb.querySelector('[data-p="loop"]').classList.toggle("is-on", st.loop);
+  pb.querySelector('[data-p="shuffle"]').classList.toggle("is-on", st.shuffle);
+
+  if (st.error && st.error !== renderPlayerbar._lastError) toast(st.error, "err");
+  renderPlayerbar._lastError = st.error;
+}
+
+pb.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-p]");
+  if (btn) {
+    const act = btn.dataset.p;
+    if (act === "play") togglePlay();
+    else if (act === "next") nextSong(true);
+    else if (act === "prev") prevSong();
+    else if (act === "loop") setLoop(!playerState().loop);
+    else if (act === "shuffle") {
+      const on = !playerState().shuffle;
+      setShuffle(on);
+      toast(on ? "Дальше пойдёт случайная песня" : "Дальше — по списку");
+    }
+    return;
+  }
+  // тап по названию — открыть страницу песни
+  if (e.target.closest("#pb-meta")) {
+    const song = currentSong();
+    if (!song) return;
+    ui.section = "song";
+    ui.openSongId = song.id;
+    [...$("#tabs").children].forEach((t) => t.classList.toggle("is-active", t.dataset.section === "song"));
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+});
+
+const audio = audioEl();
+audio.addEventListener("timeupdate", () => {
+  if (seeking || !audio.duration) return;
+  const pct = (audio.currentTime / audio.duration) * 100;
+  seekEl.value = Math.round(pct * 10);
+  seekEl.style.backgroundSize = pct + "% 100%";
+  $("#pb-cur").textContent = fmtTime(audio.currentTime);
+});
+audio.addEventListener("loadedmetadata", () => { $("#pb-dur").textContent = fmtTime(audio.duration); });
+seekEl.addEventListener("input", () => {
+  seeking = true;
+  seekEl.style.backgroundSize = seekEl.value / 10 + "% 100%";
+  if (audio.duration) $("#pb-cur").textContent = fmtTime((seekEl.value / 1000) * audio.duration);
+});
+seekEl.addEventListener("change", () => { seekTo(seekEl.value / 1000); seeking = false; });
+
+// Пробел — играть/пауза (если не печатаем в поле)
+document.addEventListener("keydown", (e) => {
+  if (e.code !== "Space" || !currentSong()) return;
+  const t = e.target;
+  if (t.matches("input, textarea, button") || t.isContentEditable) return;
+  e.preventDefault();
+  togglePlay();
+});
+
+// Плеер поменялся → обновить панель. Открытую песню целиком не перерисовываем,
+// чтобы не сбивать прокрутку по тексту — меняем только кнопку.
+onPlayerChange(() => {
+  renderPlayerbar();
+  if (ui.section !== "song") return;
+  if (ui.openSongId) {
+    const st = playerState();
+    const btn = $("#song-view .btn-play");
+    if (!btn) return;
+    const isThis = st.id === ui.openSongId;
+    btn.innerHTML = icon(isThis && st.playing ? "pause" : "play") + (isThis && st.playing ? " Пауза" : " Слушать");
+  } else {
+    renderSongs();
+  }
+});
+
+// ── Поповер «слово → в словарь» ──────────────────────────────────────
+const wordpop = $("#wordpop");
+let pickedWord = "", pickedLine = "";
+
+function openWordPop(el) {
+  closeWordPop();
+  el.classList.add("is-picked");
+  pickedWord = el.textContent.trim();
+  pickedLine = (el.closest(".ln") || el.closest(".stanza__it"))?.textContent.trim() || "";
+
+  $("#wordpop-word").textContent = pickedWord;
+  wordpop.classList.remove("is-hidden");
+
+  // спозиционировать над словом, не вылезая за экран
+  const r = el.getBoundingClientRect();
+  const w = wordpop.offsetWidth;
+  const left = Math.min(Math.max(10, r.left + r.width / 2 - w / 2), window.innerWidth - w - 10);
+  let top = r.top - wordpop.offsetHeight - 10;
+  if (top < 8) top = r.bottom + 10;
+  wordpop.style.left = left + "px";
+  wordpop.style.top = top + "px";
+}
+
+function closeWordPop() {
+  wordpop.classList.add("is-hidden");
+  document.querySelectorAll(".w.is-picked").forEach((el) => el.classList.remove("is-picked"));
+}
+
+$("#wordpop-speak").addEventListener("click", () => speak(pickedWord));
+$("#wordpop-add").addEventListener("click", () => {
+  const dup = getWords().find((w) => w.word.toLowerCase() === pickedWord.toLowerCase());
+  if (dup) { toast(`«${pickedWord}» уже есть в словаре`, "warn"); closeWordPop(); return; }
+  const song = currentSongInView();
+  configureWordDialog("word");
+  editingId = null;
+  $("#word-dialog-title").textContent = "Слово из песни";
+  wordForm.reset();
+  wordForm.word.value = pickedWord;
+  wordForm.example.value = pickedLine;
+  pendingCategory = "word";
+  wordDialog.showModal();
+  wordForm.meaning.focus();
+  closeWordPop();
+  void song;
+});
+
+function currentSongInView() { return ui.openSongId ? getSongs().find((s) => s.id === ui.openSongId) : null; }
+
+document.addEventListener("click", (e) => {
+  if (!wordpop.classList.contains("is-hidden") && !e.target.closest("#wordpop") && !e.target.closest(".w")) closeWordPop();
+});
+window.addEventListener("scroll", closeWordPop, { passive: true });
 
 // ── Инициализация ────────────────────────────────────────────────────
 async function init() {
@@ -640,6 +863,7 @@ async function init() {
   await loadInitial();
   subscribe(() => { render(); scheduleAutoPush(); });
   render();
+  renderPlayerbar();
   refreshSyncStatus();
 }
 init();
