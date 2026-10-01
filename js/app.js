@@ -1,15 +1,14 @@
-// Интерфейс: рендер слов и песен, редактирование, синхронизация, тема.
-import { KEYS, GITHUB, DATA_VERSION } from "./config.js";
+// Интерфейс: рендер слов и песен, тренировка, редактирование, синхронизация, тема.
+import { KEYS, GITHUB } from "./config.js";
 import {
-  loadInitial, subscribe,
-  getWords, setWords, addWord, updateWord, deleteWord, toggleLearned,
-  getSongs, setSongs, addSong, updateSong, deleteSong,
-  getTexts, setTexts, addText, updateText, deleteText,
-  getAssoc, setAssoc, addAssoc, updateAssoc, deleteAssoc,
+  COLLECTIONS, loadInitial, subscribe, getList, setList, mergeRemote, dirtyCollections, markPushed,
+  getWords, addWord, updateWord, deleteWord, toggleLearned, setLearned,
+  getSongs, addSong, updateSong, deleteSong,
+  getTexts, addText, updateText, deleteText,
+  getAssoc, addAssoc, updateAssoc, deleteAssoc,
 } from "./store.js";
 import {
-  pullWords, pullSongs, pullTexts, pullAssoc,
-  pushWords, pushSongs, pushTexts, pushAssoc,
+  pullCollection, pushCollection, ConflictError,
   getToken, setToken, isConfigured, checkAccess, assetUrl,
 } from "./github.js";
 import {
@@ -22,6 +21,18 @@ import {
 const icon = (name, cls = "ic") => `<svg class="${cls}"><use href="#ic-${name}"/></svg>`;
 
 const SECTION_LABEL = { word: "слово", linker: "связку", rule: "правило", swear: "ругательство", song: "песню", text: "текст", assoc: "ассоциацию" };
+
+// Баннер каждого раздела: итальянский заголовок + фото
+const SECTION = {
+  word:   { title: "Le parole",       img: "word" },
+  linker: { title: "I connettivi",    img: "linker" },
+  rule:   { title: "Le regole",       img: "rule" },
+  assoc:  { title: "Le associazioni", img: "assoc" },
+  swear:  { title: "Le parolacce",    img: "swear" },
+  song:   { title: "Le canzoni",      img: "song" },
+  text:   { title: "I testi",         img: "text" },
+};
+const TRAINABLE = new Set(["word", "linker"]);
 
 // ── Состояние интерфейса ─────────────────────────────────────────────
 const ui = { section: "word", filter: "learning", query: "", editMode: false, openSongId: null, openTextId: null };
@@ -98,6 +109,141 @@ async function resolveAsset(el, dir, name, mime) {
   }
 }
 
+// ── Статистика: сколько выучено сегодня и сколько дней подряд ────────
+// Считается по updatedAt выученных карточек — поэтому одинаково на всех
+// устройствах, без отдельного хранилища.
+const dayKey = (ts) => { const d = new Date(ts); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
+
+function activity() {
+  const days = new Set();
+  const today = dayKey(Date.now());
+  let todayCount = 0;
+  for (const w of getWords()) {
+    if (!w.learned || !w.updatedAt) continue;
+    const k = dayKey(w.updatedAt);
+    days.add(k);
+    if (k === today) todayCount++;
+  }
+  let streak = 0;
+  const d = new Date();
+  if (!days.has(dayKey(d))) d.setDate(d.getDate() - 1);   // сегодня ещё не занимался — серия не сгорела
+  while (days.has(dayKey(d))) { streak++; d.setDate(d.getDate() - 1); }
+  return { today: todayCount, streak };
+}
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 5) return "Buonanotte";
+  if (h < 12) return "Buongiorno";
+  if (h < 18) return "Buon pomeriggio";
+  return "Buonasera";
+}
+
+// Слово дня — одно и то же весь день, из ещё не выученных
+function wordOfDay() {
+  const pool = getWords().filter((w) => (w.category || "word") === "word" && !w.learned && w.meaning);
+  if (!pool.length) return null;
+  let h = 0;
+  for (const c of dayKey(Date.now())) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return pool[h % pool.length];
+}
+
+// ── Баннер раздела ───────────────────────────────────────────────────
+const stat = (ic, html, cls = "") => `<span class="stat ${cls}">${icon(ic)}<span>${html}</span></span>`;
+
+function renderHero() {
+  const hero = $("#hero");
+  const viewOpen = (ui.section === "song" && ui.openSongId) || (ui.section === "text" && ui.openTextId);
+  hero.classList.toggle("hidden", !!viewOpen);
+  if (viewOpen) return;
+
+  const sec = SECTION[ui.section];
+  hero.dataset.section = ui.section;
+  const img = $("#hero-img");
+  if (img.dataset.key !== sec.img) {
+    img.dataset.key = sec.img;
+    img.classList.remove("is-loaded");
+    $("#hero-src-sm").srcset = `img/${sec.img}-sm.webp`;
+    img.src = `img/${sec.img}.webp`;
+  }
+
+  $("#hero-kicker").textContent = `${greeting()}, Gleb`;
+  $("#hero-title").textContent = sec.title;
+
+  let stats = "", actions = "";
+  const words = getWords();
+  if (ui.section === "word" || ui.section === "linker") {
+    const list = words.filter((w) => (w.category || "word") === ui.section);
+    const learned = list.filter((w) => w.learned).length;
+    const pct = list.length ? Math.round((learned / list.length) * 100) : 0;
+    const { today, streak } = activity();
+    stats = `
+      <div class="hero__progress">
+        <div class="hero__progress-row"><b>${learned}</b><span>из ${list.length} выучено</span><em>${pct}%</em></div>
+        <div class="bar"><span style="width:${pct}%"></span></div>
+      </div>
+      <div class="hero__chips">
+        ${streak ? stat("flame", `<b>${streak}</b> ${plural(streak, "день", "дня", "дней")} подряд`, "stat--hot") : ""}
+        ${stat("spark", `<b>+${today}</b> сегодня`)}
+      </div>`;
+    if (TRAINABLE.has(ui.section) && list.some((w) => !w.learned)) {
+      actions = `<button class="btn-hero" data-act="train">${icon("cards")} Тренировка</button>`;
+    }
+  } else if (ui.section === "rule") {
+    const n = words.filter((w) => w.category === "rule").length;
+    stats = `<div class="hero__chips">${stat("rule", `<b>${n}</b> ${plural(n, "правило", "правила", "правил")}`)}</div>`;
+  } else if (ui.section === "swear") {
+    const n = words.filter((w) => w.category === "swear").length;
+    stats = `<div class="hero__chips">${stat("flame", `<b>${n}</b> ${plural(n, "выражение", "выражения", "выражений")}`)}</div>`;
+  } else if (ui.section === "song") {
+    const songs = getSongs();
+    const lines = songs.reduce((a, s) => a + (s.lyrics || []).filter((l) => l.it).length, 0);
+    stats = `<div class="hero__chips">${stat("note", `<b>${songs.length}</b> ${plural(songs.length, "песня", "песни", "песен")}`)}${stat("scroll", `<b>${lines}</b> ${plural(lines, "строка", "строки", "строк")}`)}</div>`;
+    if (songs.some((s) => s.audio)) actions = `<button class="btn-hero btn-hero--warm" data-act="random-song">${icon("shuffle")} Случайная песня</button>`;
+  } else if (ui.section === "text") {
+    const n = getTexts().length;
+    stats = `<div class="hero__chips">${stat("scroll", `<b>${n}</b> ${plural(n, "текст", "текста", "текстов")}`)}</div>`;
+  } else if (ui.section === "assoc") {
+    const n = getAssoc().length;
+    stats = `<div class="hero__chips">${stat("image", `<b>${n}</b> ${plural(n, "лист", "листа", "листов")}`)}</div>`;
+  }
+  $("#hero-stats").innerHTML = stats;
+  $("#hero-actions").innerHTML = actions;
+
+  // Слово дня — только на «Словах»
+  const wotdEl = $("#wotd");
+  const w = ui.section === "word" ? wordOfDay() : null;
+  wotdEl.classList.toggle("hidden", !w);
+  if (w) {
+    wotdEl.dataset.id = w.id;
+    wotdEl.innerHTML = `
+      <p class="wotd__kicker">Parola del giorno</p>
+      <div class="wotd__row">
+        <h3 class="wotd__word">${esc(w.word)}</h3>
+        <button class="mini-btn" data-act="wotd-speak" aria-label="Произнести">${icon("speak")}</button>
+      </div>
+      <p class="wotd__meaning">${esc(w.meaning)}</p>
+      ${w.example ? `<p class="wotd__ex">${esc(w.example)}</p>` : ""}`;
+  }
+}
+
+$("#hero-img").addEventListener("load", (e) => e.target.classList.add("is-loaded"));
+if ($("#hero-img").complete && $("#hero-img").naturalWidth) $("#hero-img").classList.add("is-loaded");
+
+$("#hero").addEventListener("click", (e) => {
+  const act = e.target.closest("[data-act]")?.dataset.act;
+  if (act === "train") openTrainer(ui.section);
+  else if (act === "random-song") {
+    const s = playRandom();
+    if (s) { ui.openSongId = s.id; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+    else toast("Нет ни одной песни с mp3", "warn");
+  }
+  else if (act === "wotd-speak") {
+    const w = getWords().find((x) => x.id === $("#wotd").dataset.id);
+    if (w) speak(w.word);
+  }
+});
+
 // ── Фильтрация слов ──────────────────────────────────────────────────
 function visibleWords() {
   const q = ui.query.trim().toLowerCase();
@@ -139,7 +285,7 @@ function cardHtml(w) {
     : "";
 
   const image = isRule && w.image
-    ? `<img class="card__img" alt="" ${isUrl(w.image) ? `src="${esc(w.image)}"` : `data-img="${esc(w.image)}"`} />`
+    ? `<img class="card__img" alt="" loading="lazy" ${isUrl(w.image) ? `src="${esc(w.image)}"` : `data-img="${esc(w.image)}"`} />`
     : "";
 
   const media = isRule ? "" :
@@ -154,7 +300,7 @@ function cardHtml(w) {
   const actions = media || editBtns ? `<div class="card__actions">${media}${editBtns}</div>` : "";
 
   const check = isSwear ? "" :
-    `<button class="card__check" data-act="learned" title="Отметить как выученное" aria-pressed="${w.learned}">${w.learned ? icon("check") : ""}</button>`;
+    `<button class="card__check" data-act="learned" title="Отметить как выученное" aria-pressed="${!!w.learned}">${icon("check")}</button>`;
 
   return `
     <article class="card card--${cat} ${learnedCls}" data-id="${w.id}">
@@ -169,21 +315,69 @@ function cardHtml(w) {
     </article>`;
 }
 
-function renderVocab() {
-  const list = visibleWords();
-  grid.innerHTML = list.map(cardHtml).join("");
-  empty.classList.toggle("hidden", list.length > 0);
+// Карточек может быть почти тысяча — рисуем порциями по мере прокрутки.
+const PAGE = 48;
+let vocabList = [];
+let shown = 0;
 
-  // Подгрузить картинки правил из приватного репо
-  grid.querySelectorAll("img[data-img]").forEach((img) =>
+function appendPage() {
+  const next = vocabList.slice(shown, shown + PAGE);
+  if (!next.length) return false;
+  grid.insertAdjacentHTML("beforeend", next.map(cardHtml).join(""));
+  shown += next.length;
+  // картинки правил — из приватного репо
+  grid.querySelectorAll("img[data-img]:not([src])").forEach((img) =>
     resolveAsset(img, GITHUB.dirs.images, img.dataset.img, "image/*"));
+  return true;
+}
 
-  // прогресс — по текущей вкладке
-  const inSection = getWords().filter((w) => (w.category || "word") === ui.section);
-  const learned = inSection.filter((w) => w.learned).length;
-  const total = inSection.length;
-  $("#progress-text").textContent = `${learned} / ${total}`;
-  $("#progress-fill").style.width = (total ? Math.round((learned / total) * 100) : 0) + "%";
+function fillViewport() {
+  const more = $("#more");
+  while (shown < vocabList.length && more.getBoundingClientRect().top < window.innerHeight + 900) {
+    if (!appendPage()) break;
+  }
+}
+
+new IntersectionObserver((entries) => {
+  if (entries[0].isIntersecting && !grid.classList.contains("hidden")) fillViewport();
+}, { rootMargin: "900px 0px" }).observe($("#more"));
+// запасной путь: на некоторых браузерах observer срабатывает не всегда
+let scrollTick = false;
+window.addEventListener("scroll", () => {
+  if (scrollTick || shown >= vocabList.length) return;
+  scrollTick = true;
+  setTimeout(() => { scrollTick = false; fillViewport(); }, 120);
+}, { passive: true });
+
+function renderVocab() {
+  vocabList = visibleWords();
+  shown = 0;
+  grid.innerHTML = "";
+  appendPage();
+  setTimeout(fillViewport, 0);
+  empty.classList.toggle("hidden", vocabList.length > 0);
+}
+
+// Галочка «выучил» — меняем одну карточку, а не перерисовываем сотни.
+function onLearnedToggled(id) {
+  const w = getWords().find((x) => x.id === id);
+  const card = grid.querySelector(`.card[data-id="${CSS.escape(id)}"]`);
+  if (!w || !card) return;
+  card.classList.toggle("is-learned", w.learned);
+  card.querySelector(".card__check")?.setAttribute("aria-pressed", String(w.learned));
+  if (w.learned) card.classList.add("just-learned");
+
+  const leaves = (ui.filter === "learning" && w.learned) || (ui.filter === "learned" && !w.learned);
+  if (leaves) {
+    card.classList.add("is-leaving");
+    setTimeout(() => {
+      card.remove();
+      const i = vocabList.findIndex((x) => x.id === id);
+      if (i >= 0) { vocabList.splice(i, 1); if (i < shown) shown--; }
+      fillViewport();
+      empty.classList.toggle("hidden", vocabList.length > 0);
+    }, 280);
+  }
 }
 
 // ── Раздел «Песни» ───────────────────────────────────────────────────
@@ -207,7 +401,7 @@ function songCardHtml(s) {
     <div class="song-card ${playing ? "is-playing" : ""}" data-id="${s.id}" data-act="open-song">
       ${editBtns}
       <div class="song-card__art" style="${artStyle(s)}">
-        ${icon("note")}
+        <span class="disc">${icon("note")}</span>
         ${s.audio ? `<button class="song-card__play" data-act="play-song" aria-label="Слушать">${icon(playing && playerState().playing ? "pause" : "play")}</button>` : ""}
       </div>
       <div class="song-card__meta">
@@ -264,10 +458,10 @@ function songViewHtml(s) {
     <div class="view-top">
       <button class="back-btn" data-act="close-song">${icon("back")} Все песни</button>
     </div>
-    <div class="song-hero">
-      <div class="song-hero__art" style="${artStyle(s)}">${icon("note")}</div>
+    <div class="song-hero" style="${artStyle(s)}">
+      <div class="song-hero__art"><span class="disc">${icon("note")}</span></div>
       <div class="song-hero__meta">
-        <p class="song-hero__kicker">Песня</p>
+        <p class="song-hero__kicker">Canzone</p>
         <h2 class="song-hero__title">${esc(s.title)}</h2>
         <p class="song-hero__artist">${esc(s.artist || "")}</p>
         <div class="song-hero__actions">${playBtn}${randomBtn}</div>
@@ -414,19 +608,20 @@ function render() {
   $("#songs").classList.toggle("hidden", !isSong);
   $("#texts").classList.toggle("hidden", !isText);
   $("#assoc").classList.toggle("hidden", !isAssoc);
-  // у мата и ассоциаций нет прогресса и фильтра «выучил» — только поиск
-  $(".progress").classList.toggle("hidden", !isVocab || isSwear);
+  // у мата и ассоциаций нет фильтра «выучил» — только поиск
   $("#filters").classList.toggle("hidden", isSwear || isAssoc);
 
   if (isSong) renderSongs();
   else if (isText) renderTexts();
   else if (isAssoc) renderAssoc();
   else renderVocab();
+  if (!isVocab) { vocabList = []; shown = 0; grid.innerHTML = ""; }
 
+  renderHero();
   updateCounts();
   closeWordPop();
   document.body.classList.toggle("edit-mode", ui.editMode);
-  document.body.classList.toggle("song-open", isSong);
+  document.body.dataset.section = ui.section;
 }
 
 // ── Клики по сетке слов ──────────────────────────────────────────────
@@ -435,7 +630,7 @@ grid.addEventListener("click", (e) => {
   if (!actEl) return;
   const id = e.target.closest(".card").dataset.id;
   const act = actEl.dataset.act;
-  if (act === "learned") toggleLearned(id);
+  if (act === "learned") { toggleLearned(id, { quiet: true }); onLearnedToggled(id); }
   else if (act === "speak") speak(getWords().find((w) => w.id === id).word);
   else if (act === "edit") openWordDialog(id);
   else if (act === "delete") { if (confirm("Удалить эту карточку?")) deleteWord(id); }
@@ -453,7 +648,7 @@ $("#songs").addEventListener("click", (e) => {
   const cardEl = e.target.closest("[data-id]");
   const id = cardEl ? cardEl.dataset.id : ui.openSongId;
 
-  if (act === "open-song") { ui.openSongId = id; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  if (act === "open-song") { ui.openSongId = id; render(); window.scrollTo({ top: 0 }); }
   else if (act === "close-song") { ui.openSongId = null; render(); }
   else if (act === "play-song") { e.stopPropagation(); playSong(id); }
   else if (act === "random-song") {
@@ -545,6 +740,118 @@ $("#texts").addEventListener("click", (e) => {
   else if (act === "edit-text") { e.stopPropagation(); openTextDialog(id); }
   else if (act === "del-text") { e.stopPropagation(); if (confirm("Удалить текст?")) { if (ui.openTextId === id) ui.openTextId = null; deleteText(id); } }
 });
+
+// ── Тренировка карточками ────────────────────────────────────────────
+// Раунд из 20 невыученных карточек раздела. «Знаю» отмечает слово выученным,
+// «Ещё учу» возвращает его в конец раунда — пока не ответишь «Знаю».
+const trainer = $("#trainer");
+const ROUND = 20;
+const tr = { queue: [], total: 0, known: 0, flipped: false, reverse: false, section: "word" };
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+  return arr;
+}
+
+function openTrainer(section) {
+  const pool = getWords().filter((w) => (w.category || "word") === section && !w.learned);
+  if (!pool.length) { toast("Здесь всё выучено 🎉", "ok"); return; }
+  tr.section = section;
+  tr.queue = shuffle(pool.map((w) => w.id)).slice(0, ROUND);
+  tr.total = tr.queue.length;
+  tr.known = 0;
+  tr.flipped = false;
+  $("#tr-dir").textContent = tr.reverse ? "RU → IT" : "IT → RU";
+  renderTrainer();
+  trainer.showModal();
+  $("#tr-stage .flash")?.focus();
+}
+
+function trainerCardHtml(w) {
+  const it = `<h3 class="flash__word">${esc(w.word)}</h3>
+              <button class="mini-btn flash__speak" data-act="tr-speak" aria-label="Произнести">${icon("speak")}</button>`;
+  const ru = `<p class="flash__meaning">${esc(w.meaning || "—")}</p>`;
+  const ex = w.example
+    ? `<p class="flash__ex">${esc(w.example)}</p>${w.exampleRu ? `<p class="flash__ex-ru">${esc(w.exampleRu)}</p>` : ""}`
+    : "";
+  const front = tr.reverse ? ru : it;
+  const back = tr.reverse ? `${it}${ex}` : `${ru}${ex}`;
+  return `
+    <div class="flash ${tr.flipped ? "is-flipped" : ""}" data-act="tr-flip" role="button" tabindex="0" aria-label="Перевернуть">
+      <span class="flash__face flash__face--front">${front}<span class="flash__flip-ic">${icon("flip")}</span></span>
+      <span class="flash__face flash__face--back">${back}</span>
+    </div>`;
+}
+
+function renderTrainer() {
+  const done = tr.total - tr.queue.length;
+  $("#tr-count").textContent = `${Math.min(done + 1, tr.total)} / ${tr.total}`;
+  $("#tr-fill").style.width = (tr.total ? (done / tr.total) * 100 : 0) + "%";
+  const stage = $("#tr-stage");
+  const actions = $("#tr-actions");
+
+  if (!tr.queue.length) {
+    $("#tr-count").textContent = `${tr.total} / ${tr.total}`;
+    actions.classList.add("hidden");
+    stage.innerHTML = `
+      <div class="tr-done">
+        <div class="tr-done__ic">${icon("trophy")}</div>
+        <h3 class="tr-done__title">Bravissimo!</h3>
+        <p class="tr-done__text">${tr.known} ${plural(tr.known, "слово", "слова", "слов")} в копилке</p>
+        <div class="tr-done__actions">
+          <button class="btn btn--primary" data-act="tr-again">Ещё раунд</button>
+          <button class="btn btn--ghost" data-act="tr-close">Закрыть</button>
+        </div>
+      </div>`;
+    return;
+  }
+  actions.classList.remove("hidden");
+  const w = getWords().find((x) => x.id === tr.queue[0]);
+  if (!w) { tr.queue.shift(); renderTrainer(); return; }
+  stage.innerHTML = trainerCardHtml(w);
+  stage.style.animation = "none"; void stage.offsetWidth; stage.style.animation = "";
+  if (trainer.open) stage.querySelector(".flash").focus({ preventScroll: true });
+}
+
+function trainerAnswer(known) {
+  const id = tr.queue.shift();
+  if (!id) return;
+  if (known) { tr.known++; setLearned(id, true, { quiet: true }); }
+  else tr.queue.push(id);                 // вернётся в конце раунда
+  tr.flipped = false;
+  renderTrainer();
+}
+
+function flipCard() {
+  const card = $("#tr-stage .flash");
+  if (!card) return;
+  tr.flipped = !tr.flipped;
+  card.classList.toggle("is-flipped", tr.flipped);
+}
+
+$("#tr-stage").addEventListener("click", (e) => {
+  const act = e.target.closest("[data-act]")?.dataset.act;
+  if (act === "tr-speak") { e.stopPropagation(); const w = getWords().find((x) => x.id === tr.queue[0]); if (w) speak(w.word); }
+  else if (act === "tr-flip") flipCard();
+  else if (act === "tr-again") openTrainer(tr.section);
+  else if (act === "tr-close") trainer.close();
+});
+$("#tr-yes").addEventListener("click", () => trainerAnswer(true));
+$("#tr-no").addEventListener("click", () => trainerAnswer(false));
+$("#tr-dir").addEventListener("click", () => {
+  tr.reverse = !tr.reverse;
+  tr.flipped = false;
+  $("#tr-dir").textContent = tr.reverse ? "RU → IT" : "IT → RU";
+  renderTrainer();
+});
+trainer.addEventListener("keydown", (e) => {
+  if (!tr.queue.length) return;
+  if (e.code === "Space" || e.code === "Enter") { e.preventDefault(); flipCard(); }
+  else if (e.code === "ArrowRight") trainerAnswer(true);
+  else if (e.code === "ArrowLeft") trainerAnswer(false);
+});
+// После закрытия — обновить список: выученные за раунд уйдут из «Учу»
+trainer.addEventListener("close", () => render());
 
 // ── Диалог слова / связки / правила ─────────────────────────────────
 const wordDialog = $("#word-dialog");
@@ -699,6 +1006,38 @@ function refreshSyncStatus() {
   }
 }
 
+// Подтянуть всё с GitHub и слить с локальным (ничего не теряя).
+async function pullAndMerge() {
+  const remote = await Promise.all(COLLECTIONS.map((n) => pullCollection(n)));
+  let changed = false;
+  COLLECTIONS.forEach((n, i) => { if (remote[i]) changed = mergeRemote(n, remote[i]) || changed; });
+  return { changed, remote };
+}
+
+// Отправить только изменённые коллекции. Если файл на GitHub успел
+// поменяться (другое устройство) — сначала слить, потом отправить.
+let pushing = null;
+async function pushDirty() {
+  if (pushing) return pushing;
+  pushing = (async () => {
+    let merged = false;
+    for (const n of dirtyCollections()) {
+      let list = getList(n);
+      try {
+        await pushCollection(n, list);
+      } catch (err) {
+        if (!(err instanceof ConflictError)) throw err;
+        merged = mergeRemote(n, await pullCollection(n)) || merged;
+        list = getList(n);
+        await pushCollection(n, list);
+      }
+      markPushed(n, list);
+    }
+    if (merged) render();
+  })();
+  try { await pushing; } finally { pushing = null; }
+}
+
 $("#btn-save-token").addEventListener("click", async () => {
   const val = $("#token-input").value.trim();
   setToken(val);
@@ -709,16 +1048,14 @@ $("#btn-save-token").addEventListener("click", async () => {
   catch (err) { toast(err.message, "err"); }
 });
 
+// «Загрузить из GitHub» — версия с GitHub целиком заменяет локальную
 $("#btn-pull").addEventListener("click", async () => {
   try {
     toast("Загружаю из GitHub…");
-    const [{ words }, { songs }, { texts }, { assoc }] =
-      await Promise.all([pullWords(), pullSongs(), pullTexts(), pullAssoc()]);
-    if (words) setWords(words);
-    if (songs) setSongs(songs);
-    if (texts) setTexts(texts);
-    if (assoc) setAssoc(assoc);
-    if (!words && !songs && !texts && !assoc) { await checkAccess(); toast("Репозиторий доступен, но файлов данных в нём пока нет", "warn"); }
+    const remote = await Promise.all(COLLECTIONS.map((n) => pullCollection(n)));
+    COLLECTIONS.forEach((n, i) => { if (remote[i]) { setList(n, remote[i], { silent: true }); mergeRemote(n, remote[i]); } });
+    const [words, songs, texts, assoc] = remote;
+    if (!remote.some(Boolean)) { await checkAccess(); toast("Репозиторий доступен, но файлов данных в нём пока нет", "warn"); }
     else toast(`Загружено: ${words ? words.length : 0} слов, ${songs ? songs.length : 0} песен, ${texts ? texts.length : 0} текстов, ${assoc ? assoc.length : 0} ассоциаций`, "ok");
     render();
     refreshSyncStatus();
@@ -728,12 +1065,9 @@ $("#btn-pull").addEventListener("click", async () => {
 $("#btn-push").addEventListener("click", async () => {
   try {
     toast("Отправляю в GitHub…");
-    await Promise.all([
-      pushWords(getWords(), "Update words from app"),
-      pushSongs(getSongs(), "Update songs from app"),
-      pushTexts(getTexts(), "Update texts from app"),
-      pushAssoc(getAssoc(), "Update assoc from app"),
-    ]);
+    await pullAndMerge();
+    await pushDirty();
+    render();
     toast("Отправлено в GitHub", "ok");
     refreshSyncStatus();
   } catch (err) { toast("Ошибка отправки: " + err.message, "err"); }
@@ -750,7 +1084,7 @@ function setSyncStatus(state) {
   else el.className = "sync-indicator";
 }
 
-// Автосохранение обоих файлов (с задержкой), если настроено
+// Автосохранение изменённого (с задержкой), если настроено
 let pushTimer = null;
 function scheduleAutoPush() {
   if (!isConfigured()) return;
@@ -758,20 +1092,19 @@ function scheduleAutoPush() {
   setSyncStatus("saving");
   pushTimer = setTimeout(async () => {
     try {
-      await Promise.all([
-        pushWords(getWords(), "Auto-sync from app"),
-        pushSongs(getSongs(), "Auto-sync from app"),
-        pushTexts(getTexts(), "Auto-sync from app"),
-        pushAssoc(getAssoc(), "Auto-sync from app"),
-      ]);
+      await pushDirty();
       refreshSyncStatus();
       setSyncStatus("saved");
     } catch (err) { console.warn("auto-push failed:", err.message); setSyncStatus("error"); }
-  }, 4000);
+  }, 2500);
 }
 
 // ── Тулбар / фильтры / вкладки / тема ────────────────────────────────
-$("#search").addEventListener("input", (e) => { ui.query = e.target.value; render(); });
+let searchTimer = null;
+$("#search").addEventListener("input", (e) => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => { ui.query = e.target.value; render(); }, 140);
+});
 
 $("#filters").addEventListener("click", (e) => {
   const chip = e.target.closest(".chip");
@@ -789,6 +1122,8 @@ $("#tabs").addEventListener("click", (e) => {
   ui.openTextId = null;
   [...$("#tabs").children].forEach((t) => t.classList.toggle("is-active", t === tab));
   render();
+  window.scrollTo({ top: 0 });
+  tab.scrollIntoView({ inline: "nearest", block: "nearest" });
 });
 
 $("#btn-edit").addEventListener("click", () => {
@@ -817,7 +1152,7 @@ document.querySelectorAll("[data-close]").forEach((b) =>
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   $("#btn-theme").innerHTML = icon(theme === "dark" ? "sun" : "moon");
-  document.querySelector('meta[name="theme-color"]').setAttribute("content", theme === "dark" ? "#08090c" : "#f6f7fb");
+  document.querySelector('meta[name="theme-color"]').setAttribute("content", theme === "dark" ? "#0a0b0f" : "#f7f4ee");
   localStorage.setItem(KEYS.theme, theme);
 }
 $("#btn-theme").addEventListener("click", () => {
@@ -896,9 +1231,9 @@ seekEl.addEventListener("input", () => {
 });
 seekEl.addEventListener("change", () => { seekTo(seekEl.value / 1000); seeking = false; });
 
-// Пробел — играть/пауза (если не печатаем в поле)
+// Пробел — играть/пауза (если не печатаем в поле и не в тренировке)
 document.addEventListener("keydown", (e) => {
-  if (e.code !== "Space" || !currentSong()) return;
+  if (e.code !== "Space" || !currentSong() || trainer.open) return;
   const t = e.target;
   if (t.matches("input, textarea, button") || t.isContentEditable) return;
   e.preventDefault();
@@ -945,6 +1280,7 @@ function openWordPop(el) {
 }
 
 function closeWordPop() {
+  if (wordpop.classList.contains("is-hidden")) return;
   wordpop.classList.add("is-hidden");
   document.querySelectorAll(".w.is-picked").forEach((el) => el.classList.remove("is-picked"));
 }
@@ -953,7 +1289,6 @@ $("#wordpop-speak").addEventListener("click", () => speak(pickedWord));
 $("#wordpop-add").addEventListener("click", () => {
   const dup = getWords().find((w) => w.word.toLowerCase() === pickedWord.toLowerCase());
   if (dup) { toast(`«${pickedWord}» уже есть в словаре`, "warn"); closeWordPop(); return; }
-  const song = currentSongInView();
   configureWordDialog("word");
   editingId = null;
   $("#word-dialog-title").textContent = "Слово из песни";
@@ -964,10 +1299,7 @@ $("#wordpop-add").addEventListener("click", () => {
   wordDialog.showModal();
   wordForm.meaning.focus();
   closeWordPop();
-  void song;
 });
-
-function currentSongInView() { return ui.openSongId ? getSongs().find((s) => s.id === ui.openSongId) : null; }
 
 document.addEventListener("click", (e) => {
   if (!wordpop.classList.contains("is-hidden") && !e.target.closest("#wordpop") && !e.target.closest(".w")) closeWordPop();
@@ -975,35 +1307,26 @@ document.addEventListener("click", (e) => {
 window.addEventListener("scroll", closeWordPop, { passive: true });
 
 // ── Инициализация ────────────────────────────────────────────────────
-
-// Кэш в localStorage «старше» текущей версии данных → один раз тянем свежее
-// из GitHub, чтобы после обновления списка не смотреть на старый.
-// Версию проставляем только после успешной загрузки, поэтому без токена
-// попытка просто повторится в следующий раз.
-async function syncIfStale() {
-  if (localStorage.getItem(KEYS.dataVer) === String(DATA_VERSION)) return;
-  if (!isConfigured()) return;
-  try {
-    const [{ words }, { songs }, { texts }, { assoc }] =
-      await Promise.all([pullWords(), pullSongs(), pullTexts(), pullAssoc()]);
-    if (words) setWords(words, { silent: true });
-    if (songs) setSongs(songs, { silent: true });
-    if (texts) setTexts(texts, { silent: true });
-    if (assoc) setAssoc(assoc, { silent: true });
-    localStorage.setItem(KEYS.dataVer, String(DATA_VERSION));
-  } catch (err) {
-    console.warn("first sync failed:", err.message);
-  }
-}
-
 async function init() {
   applyTheme(localStorage.getItem(KEYS.theme) || "dark");
   await loadInitial();
-  // до subscribe — чтобы обновление данных не улетело обратно автосохранением
-  await syncIfStale();
-  subscribe(() => { render(); scheduleAutoPush(); });
+  subscribe((change) => {
+    if (change.quiet) { renderHero(); updateCounts(); }
+    else render();
+    scheduleAutoPush();
+  });
   render();
   renderPlayerbar();
   refreshSyncStatus();
+
+  // Каждый заход — свежие данные с GitHub (слияние, ничего не теряется),
+  // потом отправка того, что не успело уйти в прошлый раз.
+  if (isConfigured()) {
+    try {
+      const { changed } = await pullAndMerge();
+      if (changed) render();
+      if (dirtyCollections().length) scheduleAutoPush();
+    } catch (err) { console.warn("sync on start failed:", err.message); }
+  }
 }
 init();

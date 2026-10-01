@@ -28,14 +28,12 @@ export const KEYS = {
   shaTexts: "it_gh_sha_texts",
   shaAssoc: "it_gh_sha_assoc",
   theme:    "it_theme",
-  dataVer:  "it_data_version",
   lastSync: "it_last_sync",
+  dirty:    "it_dirty",          // коллекции с неотправленными правками
+  tomb:     "it_tomb",           // id удалённых записей (чтобы слияние их не вернуло)
+  pending:  "it_pending",        // id новых записей, ещё не отправленных на GitHub
 };
 
-// Версия данных. Если в браузере лежит кэш от прошлой версии, приложение
-// один раз само подтянет свежие данные из GitHub (иначе показывало бы старый
-// список из localStorage, пока не нажмёшь «Загрузить из GitHub» вручную).
-export const DATA_VERSION = 4;
 
 // Стартовые данные при первом заходе (демо в публичном репозитории)
 export const DATA_URL = {

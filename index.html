@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#08090c" />
+    <meta name="theme-color" content="#0a0b0f" />
     <title>Il mio italiano · Мой итальянский</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 3 2'><rect width='1' height='2' x='0' fill='%23008C45'/><rect width='1' height='2' x='1' fill='%23F4F5F0'/><rect width='1' height='2' x='2' fill='%23CD212A'/></svg>" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -12,12 +12,8 @@
     <link rel="stylesheet" href="css/styles.css" />
   </head>
   <body>
-    <!-- Живой mesh-градиент на фоне -->
-    <div class="mesh" aria-hidden="true">
-      <span class="mesh__blob mesh__blob--1"></span>
-      <span class="mesh__blob mesh__blob--2"></span>
-      <span class="mesh__blob mesh__blob--3"></span>
-    </div>
+    <!-- Фон: статичные цветные пятна (без blur-анимации — не грузит видеокарту) -->
+    <div class="bg" aria-hidden="true"></div>
 
     <!-- Иконки (спрайт) -->
     <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -45,10 +41,15 @@
       <symbol id="ic-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="m6 7 1 13h10l1-13"/></symbol>
       <symbol id="ic-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
       <symbol id="ic-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7"/></symbol>
+      <symbol id="ic-cards" viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="15" rx="2.5"/><path d="M8 3h10.5A2.5 2.5 0 0 1 21 5.5V16"/></symbol>
+      <symbol id="ic-spark" viewBox="0 0 24 24"><path d="M12 3v4"/><path d="M12 17v4"/><path d="M3 12h4"/><path d="M17 12h4"/><path d="m6 6 2.5 2.5"/><path d="m15.5 15.5 2.5 2.5"/><path d="m18 6-2.5 2.5"/><path d="M8.5 15.5 6 18"/></symbol>
+      <symbol id="ic-trophy" viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4"/><path d="M16 6h3a3 3 0 0 1-3 4"/><path d="M12 13v4"/><path d="M8.5 20h7"/><path d="M10 17h4v3h-4z"/></symbol>
+      <symbol id="ic-flip" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.7-5.6L20 9"/><path d="M20 4v5h-5"/><path d="M20 12a8 8 0 0 1-13.7 5.6L4 15"/><path d="M4 20v-5h5"/></symbol>
       <symbol id="ic-ext" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
     </svg>
 
     <header class="appbar">
+      <div class="appbar__inner">
       <div class="appbar__row">
         <h1 class="appbar__title"><span class="tricolore" aria-hidden="true"></span><span class="appbar__name">Il&nbsp;mio&nbsp;italiano</span></h1>
         <div class="appbar__actions">
@@ -67,28 +68,41 @@
         <button class="tab" data-section="song"><svg class="ic"><use href="#ic-note"/></svg><span class="tab__label">Песни</span><span class="tab__count" data-count="song">0</span></button>
         <button class="tab" data-section="text"><svg class="ic"><use href="#ic-scroll"/></svg><span class="tab__label">Тексты</span><span class="tab__count" data-count="text">0</span></button>
       </nav>
-
-      <!-- Инструменты для словаря/связок/правил -->
-      <div id="vocab-tools">
-        <div class="progress">
-          <div class="progress__bar"><span id="progress-fill" class="progress__fill"></span></div>
-          <span id="progress-text" class="progress__text">0 / 0</span>
-        </div>
-        <div class="appbar__row appbar__tools">
-          <div class="search-wrap">
-            <svg class="ic search-wrap__ic"><use href="#ic-search"/></svg>
-            <input id="search" class="search" type="search" placeholder="Поиск слова или перевода…" autocomplete="off" />
-          </div>
-          <div class="chips" id="filters">
-            <button class="chip is-active" data-filter="learning">Учу</button>
-            <button class="chip" data-filter="learned">Выучено</button>
-          </div>
-        </div>
       </div>
     </header>
 
     <main class="container">
+      <!-- Баннер раздела: фото, приветствие, статистика -->
+      <section id="hero" class="hero">
+        <picture class="hero__pic">
+          <source id="hero-src-sm" media="(max-width: 640px)" srcset="img/word-sm.webp" />
+          <img id="hero-img" class="hero__img" data-key="word" src="img/word.webp" alt="" width="1400" height="420" decoding="async" fetchpriority="high" />
+        </picture>
+        <div class="hero__shade"></div>
+        <div class="hero__body">
+          <p class="hero__kicker" id="hero-kicker"></p>
+          <h2 class="hero__title" id="hero-title"></h2>
+          <div class="hero__stats" id="hero-stats"></div>
+          <div class="hero__actions" id="hero-actions"></div>
+        </div>
+        <aside class="wotd hidden" id="wotd"></aside>
+      </section>
+
+      <!-- Поиск и фильтры -->
+      <div id="vocab-tools" class="toolbar">
+        <div class="search-wrap">
+          <svg class="ic search-wrap__ic"><use href="#ic-search"/></svg>
+          <input id="search" class="search" type="search" placeholder="Поиск слова или перевода…" autocomplete="off" />
+        </div>
+        <div class="chips" id="filters">
+          <button class="chip is-active" data-filter="learning">Учу</button>
+          <button class="chip" data-filter="learned">Выучено</button>
+          <button class="chip" data-filter="all">Все</button>
+        </div>
+      </div>
+
       <div id="grid" class="grid" aria-live="polite"></div>
+      <div id="more" class="more" aria-hidden="true"></div>
 
       <section id="songs" class="hidden">
         <div id="songs-list" class="songs-list"></div>
@@ -279,6 +293,21 @@
           <button type="button" class="btn btn--ghost" data-close>Закрыть</button>
           <button type="button" class="btn" id="btn-save-token">Сохранить токен</button>
         </div>
+      </div>
+    </dialog>
+
+    <!-- Тренировка карточками -->
+    <dialog id="trainer" class="trainer">
+      <div class="trainer__top">
+        <button class="icon-btn" data-close aria-label="Закрыть"><svg class="ic"><use href="#ic-close"/></svg></button>
+        <div class="trainer__bar"><span id="tr-fill"></span></div>
+        <span class="trainer__count" id="tr-count">0 / 0</span>
+        <button class="chip trainer__dir" id="tr-dir" title="Направление">IT → RU</button>
+      </div>
+      <div class="trainer__stage" id="tr-stage"></div>
+      <div class="trainer__actions" id="tr-actions">
+        <button class="big-btn big-btn--no" id="tr-no">Ещё учу</button>
+        <button class="big-btn big-btn--yes" id="tr-yes"><svg class="ic"><use href="#ic-check"/></svg>Знаю</button>
       </div>
     </dialog>
 

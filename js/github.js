@@ -1,6 +1,6 @@
 // Слой синхронизации с GitHub (роль «бэкенда» для статического сайта).
-// Читает/коммитит words.json и songs.json в приватный репозиторий данных,
-// а также умеет тянуть бинарные файлы (mp3 песен, картинки правил) по токену.
+// Читает/коммитит JSON-файлы данных в приватный репозиторий и тянет
+// бинарные файлы (mp3 песен, картинки) по токену.
 // Токен хранится ТОЛЬКО в localStorage этого браузера.
 import { GITHUB, KEYS } from "./config.js";
 
@@ -8,16 +8,14 @@ const API = "https://api.github.com";
 
 // ── base64 <-> UTF-8 (кириллица корректно) ──────────────────────────
 function b64EncodeUnicode(str) {
-  return btoa(
-    encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode("0x" + p1))
-  );
+  const bytes = new TextEncoder().encode(str);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
 }
 function b64DecodeUnicode(str) {
-  return decodeURIComponent(
-    atob(str).split("").map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)).join("")
-  );
+  return new TextDecoder().decode(b64ToBytes(str));
 }
-// base64 -> сырые байты (для mp3/картинок)
 function b64ToBytes(b64) {
   const bin = atob(b64.replace(/\n/g, ""));
   const bytes = new Uint8Array(bin.length);
@@ -33,10 +31,10 @@ export function setToken(t) {
 }
 export function isConfigured() { return Boolean(GITHUB.owner && GITHUB.repo && getToken()); }
 
-function headers() {
+function headers(accept = "application/vnd.github+json") {
   return {
     Authorization: `Bearer ${getToken()}`,
-    Accept: "application/vnd.github+json",
+    Accept: accept,
     "X-GitHub-Api-Version": "2022-11-28",
   };
 }
@@ -46,7 +44,7 @@ function contentsUrl(path) {
 
 // Проверить, что токен реально видит приватный репозиторий данных.
 export async function checkAccess() {
-  const res = await fetch(`${API}/repos/${GITHUB.owner}/${GITHUB.repo}`, { headers: headers() });
+  const res = await fetch(`${API}/repos/${GITHUB.owner}/${GITHUB.repo}`, { headers: headers(), cache: "no-store" });
   if (res.status === 401) throw new Error("Неверный или просроченный токен (401). Скопируй токен заново (github_pat_…).");
   if (res.status === 403) throw new Error("Токену не хватает прав (403).");
   if (res.status === 404) throw new Error(`Токен не видит репозиторий «${GITHUB.repo}». Нужен доступ к нему с правом Contents: Read and write.`);
@@ -54,16 +52,25 @@ export async function checkAccess() {
   return true;
 }
 
+// Файл на GitHub изменился с тех пор, как мы его читали.
+export class ConflictError extends Error {}
+
 // ── Универсальные pull/push JSON-файла ──────────────────────────────
 async function pullJson(path, shaKey) {
   const url = `${contentsUrl(path)}?ref=${encodeURIComponent(GITHUB.branch)}`;
-  const res = await fetch(url, { headers: headers() });
+  const res = await fetch(url, { headers: headers(), cache: "no-store" });
   if (res.status === 404) return { data: null, sha: null }; // файла ещё нет
   if (!res.ok) throw new Error(`GitHub pull ${path}: ${res.status} ${res.statusText}`);
   const meta = await res.json();
-  const json = b64DecodeUnicode(meta.content);
+  let b64 = meta.content;
+  if (!b64 || meta.encoding === "none") {
+    // файл больше 1 МБ — содержимое только через Blobs API
+    const blob = await fetch(`${API}/repos/${GITHUB.owner}/${GITHUB.repo}/git/blobs/${meta.sha}`, { headers: headers(), cache: "no-store" });
+    if (!blob.ok) throw new Error(`GitHub pull ${path}: ${blob.status}`);
+    b64 = (await blob.json()).content;
+  }
   localStorage.setItem(shaKey, meta.sha);
-  return { data: JSON.parse(json), sha: meta.sha };
+  return { data: JSON.parse(b64DecodeUnicode(b64)), sha: meta.sha };
 }
 
 async function pushJson(path, shaKey, obj, message) {
@@ -81,12 +88,9 @@ async function pushJson(path, shaKey, obj, message) {
     body: JSON.stringify(body),
   });
 
-  if (res.status === 409) {
-    // конфликт версий: подтягиваем свежий sha и повторяем
-    const fresh = await pullJson(path, shaKey);
-    localStorage.setItem(shaKey, fresh.sha || "");
-    return pushJson(path, shaKey, obj, message);
-  }
+  // 409 — sha устарел, 422 — sha не передан, а файл уже есть.
+  // Вслепую не перезаписываем: пусть вызывающий сначала сольёт свежие данные.
+  if (res.status === 409 || res.status === 422) throw new ConflictError(path);
   if (!res.ok) throw new Error(`GitHub push ${path}: ${res.status} ${await res.text()}`);
   const data = await res.json();
   localStorage.setItem(shaKey, data.content.sha);
@@ -94,61 +98,57 @@ async function pushJson(path, shaKey, obj, message) {
   return data;
 }
 
-// ── Публичные обёртки для слов и песен ──────────────────────────────
-export async function pullWords() {
-  const { data } = await pullJson(GITHUB.paths.words, KEYS.shaWords);
-  return { words: data };
+// ── Коллекции: words / songs / texts / assoc ────────────────────────
+const SHA_KEY = { words: KEYS.shaWords, songs: KEYS.shaSongs, texts: KEYS.shaTexts, assoc: KEYS.shaAssoc };
+
+export function pullCollection(name) {
+  return pullJson(GITHUB.paths[name], SHA_KEY[name]).then((r) => r.data);
 }
-export async function pullSongs() {
-  const { data } = await pullJson(GITHUB.paths.songs, KEYS.shaSongs);
-  return { songs: data };
-}
-export async function pullTexts() {
-  const { data } = await pullJson(GITHUB.paths.texts, KEYS.shaTexts);
-  return { texts: data };
-}
-export function pushWords(words, message = "Update words") {
-  return pushJson(GITHUB.paths.words, KEYS.shaWords, words, message);
-}
-export function pushSongs(songs, message = "Update songs") {
-  return pushJson(GITHUB.paths.songs, KEYS.shaSongs, songs, message);
-}
-export function pushTexts(texts, message = "Update texts") {
-  return pushJson(GITHUB.paths.texts, KEYS.shaTexts, texts, message);
-}
-export async function pullAssoc() {
-  const { data } = await pullJson(GITHUB.paths.assoc, KEYS.shaAssoc);
-  return { assoc: data };
-}
-export function pushAssoc(assoc, message = "Update assoc") {
-  return pushJson(GITHUB.paths.assoc, KEYS.shaAssoc, assoc, message);
+export function pushCollection(name, list, message = "Auto-sync from app") {
+  return pushJson(GITHUB.paths[name], SHA_KEY[name], list, message);
 }
 
 // ── Бинарные ассеты из приватного репо (mp3, картинки) ──────────────
-// Возвращает object URL, который можно подставить в <audio src> / <img src>.
-// Кэшируем в памяти, чтобы не тянуть один и тот же файл повторно.
-const assetCache = new Map();
+// Список файлов репо с их sha берём одним запросом (дерево), сами файлы
+// качаем «сырыми» байтами и кладём в Cache Storage по sha — повторно
+// песня включается мгновенно, даже после перезагрузки страницы.
+const ASSET_CACHE = "it-assets-v1";
+const urlCache = new Map();
+let treePromise = null;
+
+function repoTree() {
+  if (!treePromise) {
+    treePromise = fetch(`${API}/repos/${GITHUB.owner}/${GITHUB.repo}/git/trees/${encodeURIComponent(GITHUB.branch)}?recursive=1`,
+      { headers: headers(), cache: "no-store" })
+      .then((r) => { if (!r.ok) throw new Error(`GitHub: ${r.status}`); return r.json(); })
+      .then((j) => new Map(j.tree.filter((t) => t.type === "blob").map((t) => [t.path, t.sha])))
+      .catch((err) => { treePromise = null; throw err; });
+  }
+  return treePromise;
+}
+
+async function openCache() {
+  try { return "caches" in window ? await caches.open(ASSET_CACHE) : null; } catch { return null; }
+}
 
 export async function assetUrl(dir, name, mime = "application/octet-stream") {
   const path = `${dir}/${name}`.replace(/\/+/g, "/");
-  if (assetCache.has(path)) return assetCache.get(path);
+  if (urlCache.has(path)) return urlCache.get(path);
 
-  // 1) метаданные файла
-  const metaRes = await fetch(`${contentsUrl(path)}?ref=${encodeURIComponent(GITHUB.branch)}`, { headers: headers() });
-  if (!metaRes.ok) throw new Error(`Файл ${path} не найден (${metaRes.status})`);
-  const meta = await metaRes.json();
+  const sha = (await repoTree()).get(path);
+  if (!sha) throw new Error(`Файл ${path} не найден`);
 
-  // 2) содержимое: маленькие файлы приходят в base64 сразу,
-  //    большие (>1 МБ) тянем через Blobs API по sha.
-  let b64 = meta.content;
-  if (!b64 || meta.encoding === "none") {
-    const blobRes = await fetch(`${API}/repos/${GITHUB.owner}/${GITHUB.repo}/git/blobs/${meta.sha}`, { headers: headers() });
-    if (!blobRes.ok) throw new Error(`Не удалось скачать ${path} (${blobRes.status})`);
-    b64 = (await blobRes.json()).content;
+  const cache = await openCache();
+  const key = `/__asset/${sha}`;
+  let res = cache && (await cache.match(key));
+  if (!res) {
+    const raw = await fetch(`${contentsUrl(path)}?ref=${encodeURIComponent(GITHUB.branch)}`, { headers: headers("application/vnd.github.raw") });
+    if (!raw.ok) throw new Error(`Не удалось скачать ${path} (${raw.status})`);
+    const blob = new Blob([await raw.arrayBuffer()], { type: mime });
+    if (cache) cache.put(key, new Response(blob, { headers: { "Content-Type": mime } })).catch(() => {});
+    res = new Response(blob);
   }
-
-  const blob = new Blob([b64ToBytes(b64)], { type: mime });
-  const objUrl = URL.createObjectURL(blob);
-  assetCache.set(path, objUrl);
+  const objUrl = URL.createObjectURL(new Blob([await res.blob()], { type: mime }));
+  urlCache.set(path, objUrl);
   return objUrl;
 }

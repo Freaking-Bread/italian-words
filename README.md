@@ -57,3 +57,10 @@ italian-words-data/       ← приватный репозиторий (реа�
 
 Пока приложение онлайновое. Как сделать его полностью офлайновым «со своей памятью»
 (когда захочешь) — расписано в `italian-words-data/OFFLINE-PLAN.md`.
+
+## Фото
+
+Баннеры разделов (`img/*.webp`) — с [Unsplash](https://unsplash.com/license), бесплатная лицензия:
+Sebastian Leonhardt (Позитано), Karsten Würth (Венеция), Pretty Pink (Флоренция),
+Iga Palacz и Grigorii Shcheglov (веспы), Miriana Dorobanțu (винил),
+Luca Micheli (Тоскана), Gabriella Clare Marino (эспрессо).
