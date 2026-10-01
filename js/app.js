@@ -14,6 +14,7 @@ import {
 import {
   play as playSong, toggle as togglePlay, next as nextSong, prev as prevSong,
   playRandom, setLoop, setShuffle, seekTo, onPlayerChange, playerState,
+  setVolume, toggleMute, volumeAdjustable,
   currentSong, audioEl, hues, fmtTime,
 } from "./player.js";
 
@@ -1183,16 +1184,51 @@ function renderPlayerbar() {
   pb.querySelector('[data-p="play"]').innerHTML = icon(st.playing ? "pause" : "play");
   pb.querySelector('[data-p="loop"]').classList.toggle("is-on", st.loop);
   pb.querySelector('[data-p="shuffle"]').classList.toggle("is-on", st.shuffle);
+  renderVolume();
 
   if (st.error && st.error !== renderPlayerbar._lastError) toast(st.error, "err");
   renderPlayerbar._lastError = st.error;
 }
 
+// ── Громкость ────────────────────────────────────────────────────────
+const volEl = $("#vol");
+const volRange = $("#pb-vol");
+const narrow = matchMedia("(max-width: 860px)");
+volEl.classList.toggle("vol--fixed", !volumeAdjustable);
+
+function renderVolume() {
+  const { volume, muted } = playerState();
+  const level = muted ? 0 : volume;
+  const ic = level === 0 ? "mute" : level < 0.5 ? "vol-low" : "vol";
+  volEl.querySelector('[data-p="mute"]').innerHTML = icon(ic);
+  volEl.querySelector('[data-p="mute"]').classList.toggle("is-muted", level === 0);
+  volRange.value = Math.round(level * 100);
+  volRange.style.backgroundSize = level * 100 + "% 100%";
+}
+
+volRange.addEventListener("input", () => setVolume(volRange.value / 100));
+// колёсико мыши над регулятором — тоже громкость
+volEl.addEventListener("wheel", (e) => {
+  if (!volumeAdjustable) return;
+  e.preventDefault();
+  const { volume, muted } = playerState();
+  setVolume((muted ? 0 : volume) + (e.deltaY < 0 ? 0.05 : -0.05));
+}, { passive: false });
+// тап мимо всплывающего регулятора (на телефоне) — закрыть его
+document.addEventListener("click", (e) => {
+  if (volEl.classList.contains("is-open") && !e.target.closest("#vol")) volEl.classList.remove("is-open");
+});
+
 pb.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-p]");
   if (btn) {
     const act = btn.dataset.p;
-    if (act === "play") togglePlay();
+    if (act === "mute") {
+      // на телефоне кнопка открывает ползунок, на компьютере — выключает звук
+      if (narrow.matches && volumeAdjustable) volEl.classList.toggle("is-open");
+      else toggleMute();
+    }
+    else if (act === "play") togglePlay();
     else if (act === "next") nextSong(true);
     else if (act === "prev") prevSong();
     else if (act === "loop") setLoop(!playerState().loop);

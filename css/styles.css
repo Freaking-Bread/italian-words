@@ -720,8 +720,15 @@ body.is-playing .song-card.is-playing .disc { animation: spinDisc 6s linear infi
 .playerbar__inner {
   max-width: 1180px; margin: 0 auto;
   display: grid; align-items: center; gap: 12px;
-  grid-template-columns: auto minmax(0, 1.1fr) auto minmax(0, 1.6fr) auto;
+  grid-template-columns: auto minmax(0, 1.1fr) auto minmax(0, 1.6fr) auto auto;
 }
+
+/* Громкость: на компьютере — кнопка + ползунок в строку */
+.vol { position: relative; display: flex; align-items: center; gap: 2px; }
+.vol__pop { display: flex; align-items: center; }
+.vol__range { width: 92px; min-width: 0; flex: none; }
+.vol--fixed .vol__pop { display: none; }
+.pb-btn.is-muted { color: var(--rose); }
 
 .playerbar__art {
   position: relative; width: 48px; height: 48px; border-radius: 13px; flex: none;
@@ -778,7 +785,17 @@ body.is-playing .playerbar__art .ic { opacity: 0; }
 .seek::-moz-range-thumb { width: 13px; height: 13px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.5); }
 
 @media (max-width: 860px) {
-  .playerbar__inner { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "art meta controls" "seek seek seek"; row-gap: 6px; }
+  .playerbar__inner { grid-template-columns: auto minmax(0, 1fr) auto auto; grid-template-areas: "art meta controls vol" "seek seek seek seek"; row-gap: 6px; column-gap: 6px; }
+  .vol { grid-area: vol; }
+  /* на телефоне ползунок всплывает над кнопкой */
+  .vol__pop {
+    display: none; position: absolute; right: -4px; bottom: calc(100% + 12px);
+    padding: 14px 16px; border-radius: 16px;
+    background: var(--card-2); border: 1px solid var(--border-2); box-shadow: var(--shadow);
+  }
+  .vol.is-open .vol__pop { display: flex; animation: popIn .2s var(--spring) both; }
+  .vol__range { width: 168px; height: 7px; }
+  .vol__range::-webkit-slider-thumb { opacity: 1; width: 18px; height: 18px; }
   .playerbar__art { grid-area: art; }
   .playerbar__meta { grid-area: meta; }
   .playerbar__controls { grid-area: controls; }

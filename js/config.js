@@ -28,6 +28,8 @@ export const KEYS = {
   shaTexts: "it_gh_sha_texts",
   shaAssoc: "it_gh_sha_assoc",
   theme:    "it_theme",
+  volume:   "it_volume",         // громкость плеера 0…1
+  muted:    "it_muted",
   lastSync: "it_last_sync",
   dirty:    "it_dirty",          // коллекции с неотправленными правками
   tomb:     "it_tomb",           // id удалённых записей (чтобы слияние их не вернуло)

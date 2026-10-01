@@ -23,6 +23,9 @@
       <symbol id="ic-flame" viewBox="0 0 24 24"><path d="M12 3s5 4.5 5 9a5 5 0 0 1-10 0c0-1.5.7-2.8 1.5-3.7C9 10 10 11 10 12c0-3 2-6 2-9z"/></symbol>
       <symbol id="ic-note" viewBox="0 0 24 24"><path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
       <symbol id="ic-image" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="8.5" cy="10" r="1.6"/><path d="m4 17 4.5-4.5 3.5 3.5 3-3L20 17"/></symbol>
+      <symbol id="ic-vol" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z"/><path d="M15.5 9.2a4 4 0 0 1 0 5.6"/><path d="M18.3 6.5a8 8 0 0 1 0 11"/></symbol>
+      <symbol id="ic-vol-low" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z"/><path d="M15.5 9.2a4 4 0 0 1 0 5.6"/></symbol>
+      <symbol id="ic-mute" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z"/><path d="m16 9.5 5 5"/><path d="m21 9.5-5 5"/></symbol>
       <symbol id="ic-close" viewBox="0 0 24 24"><path d="m6 6 12 12"/><path d="M18 6 6 18"/></symbol>
       <symbol id="ic-scroll" viewBox="0 0 24 24"><path d="M6 4h12v14a2 2 0 0 0 2 2H8a2 2 0 0 1-2-2z"/><path d="M9 8h6"/><path d="M9 12h6"/></symbol>
       <symbol id="ic-play" viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z" fill="currentColor" stroke="none"/></symbol>
@@ -143,6 +146,12 @@
           <span class="playerbar__time" id="pb-cur">0:00</span>
           <input id="pb-seek" class="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Перемотка" />
           <span class="playerbar__time" id="pb-dur">0:00</span>
+        </div>
+        <div class="vol" id="vol">
+          <button class="pb-btn" data-p="mute" title="Звук" aria-label="Звук"><svg class="ic"><use href="#ic-vol"/></svg></button>
+          <div class="vol__pop">
+            <input id="pb-vol" class="seek vol__range" type="range" min="0" max="100" value="100" step="1" aria-label="Громкость" />
+          </div>
         </div>
         <div class="playerbar__toggles">
           <button class="pb-btn pb-btn--toggle" data-p="loop" title="Повторять эту песню" aria-label="Повторять песню"><svg class="ic"><use href="#ic-loop"/></svg></button>

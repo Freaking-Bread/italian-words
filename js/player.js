@@ -1,5 +1,5 @@
 // Плеер: живёт поверх всех вкладок, помнит очередь, умеет loop и случайный переход.
-import { GITHUB } from "./config.js";
+import { GITHUB, KEYS } from "./config.js";
 import { getSongs } from "./store.js";
 import { assetUrl, isConfigured } from "./github.js";
 
@@ -11,7 +11,26 @@ const state = {
   loop: false,
   shuffle: true,     // по умолчанию дальше идёт случайная песня
   error: "",
+  volume: 1,         // 0…1, запоминается в браузере
+  muted: false,
 };
+
+// Громкость с прошлого раза
+{
+  const v = parseFloat(localStorage.getItem(KEYS.volume));
+  if (v >= 0 && v <= 1) state.volume = v;
+  state.muted = localStorage.getItem(KEYS.muted) === "1";
+  audio.volume = state.volume;
+  audio.muted = state.muted;
+}
+
+// На iPhone громкость задаётся только кнопками телефона — audio.volume
+// там всегда 1. Тогда ползунок прячем, остаётся только «выключить звук».
+export const volumeAdjustable = (() => {
+  const probe = new Audio();
+  probe.volume = 0.5;
+  return probe.volume === 0.5;
+})();
 
 const listeners = new Set();
 export function onPlayerChange(cb) { listeners.add(cb); return () => listeners.delete(cb); }
@@ -110,6 +129,25 @@ export function playRandom() {
   const s = randomOther(list, state.id);
   play(s.id);
   return s;
+}
+
+export function setVolume(v) {
+  state.volume = Math.min(1, Math.max(0, v));
+  audio.volume = state.volume;
+  // подвинул ползунок выше нуля — звук включается сам
+  if (state.volume > 0 && state.muted) { state.muted = false; audio.muted = false; }
+  localStorage.setItem(KEYS.volume, String(state.volume));
+  localStorage.setItem(KEYS.muted, state.muted ? "1" : "0");
+  emit();
+}
+export function toggleMute() {
+  state.muted = !state.muted;
+  audio.muted = state.muted;
+  // включили звук, а громкость была на нуле — вернуть слышимую
+  if (!state.muted && state.volume === 0) { state.volume = 0.6; audio.volume = 0.6; }
+  localStorage.setItem(KEYS.muted, state.muted ? "1" : "0");
+  localStorage.setItem(KEYS.volume, String(state.volume));
+  emit();
 }
 
 export function setLoop(on) { state.loop = on; audio.loop = on; emit(); }
