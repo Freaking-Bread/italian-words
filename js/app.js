@@ -270,7 +270,7 @@ function cardHtml(w) {
   const learnedCls = !isSwear && w.learned ? "is-learned" : "";
 
   const head = isRule
-    ? `<p class="card__rule">${esc(w.word)}</p>`
+    ? (w.word ? `<p class="card__rule">${esc(w.word)}</p>` : "")
     : `<div class="card__word-row">
          <h3 class="card__word">${esc(w.word)}</h3>
          <button class="mini-btn" data-act="speak" title="Произнести" aria-label="Произнести">${icon("speak")}</button>
@@ -286,7 +286,10 @@ function cardHtml(w) {
     : "";
 
   const image = isRule && w.image
-    ? `<img class="card__img" alt="" loading="lazy" ${isUrl(w.image) ? `src="${esc(w.image)}"` : `data-img="${esc(w.image)}"`} />`
+    ? `<button class="card__zoom" data-act="zoom" title="Увеличить" aria-label="Увеличить">
+         <img class="card__img" alt="" loading="lazy" ${isUrl(w.image) ? `src="${esc(w.image)}"` : `data-img="${esc(w.image)}"`} />
+         <span class="card__zoom-ic">${icon("search")}</span>
+       </button>`
     : "";
 
   const media = isRule ? "" :
@@ -635,6 +638,7 @@ grid.addEventListener("click", (e) => {
   else if (act === "speak") speak(getWords().find((w) => w.id === id).word);
   else if (act === "edit") openWordDialog(id);
   else if (act === "delete") { if (confirm("Удалить эту карточку?")) deleteWord(id); }
+  else if (act === "zoom") { const w = getWords().find((x) => x.id === id); openImageViewer(w.image, w.word, w.meaning ? `${w.word} — ${w.meaning}` : w.word); }
 });
 
 // ── Клики в разделе песен ────────────────────────────────────────────
@@ -679,11 +683,15 @@ const assocViewer = $("#assoc-viewer");
 function openAssocViewer(id) {
   const a = getAssoc().find((x) => x.id === id);
   if (!a) return;
+  openImageViewer(a.image, a.title, a.note ? `${a.title} — ${a.note}` : a.title);
+}
+
+function openImageViewer(image, alt, caption) {
   const imgEl = $("#assoc-viewer-img");
   imgEl.removeAttribute("src");
-  imgEl.alt = a.title;
-  $("#assoc-viewer-cap").textContent = a.note ? `${a.title} — ${a.note}` : a.title;
-  if (a.image) resolveAsset(imgEl, GITHUB.dirs.images, a.image, "image/jpeg");
+  imgEl.alt = alt || "";
+  $("#assoc-viewer-cap").textContent = caption || "";
+  if (image) resolveAsset(imgEl, GITHUB.dirs.images, image, "image/*");
   assocViewer.showModal();
 }
 
@@ -755,7 +763,7 @@ function shuffle(arr) {
 }
 
 function openTrainer(section) {
-  const pool = getWords().filter((w) => (w.category || "word") === section && !w.learned);
+  const pool = getWords().filter((w) => (w.category || "word") === section && !w.learned && w.word);
   if (!pool.length) { toast("Здесь всё выучено 🎉", "ok"); return; }
   tr.section = section;
   tr.queue = shuffle(pool.map((w) => w.id)).slice(0, ROUND);
@@ -871,6 +879,8 @@ function configureWordDialog(category) {
   wordForm.example.closest(".field").hidden = isRule;
   wordForm.exampleRu.closest(".field").hidden = isRule;
   $("#field-image").hidden = !isRule;
+  // правило может быть одной картинкой без текста
+  wordForm.word.required = !isRule;
 }
 
 function openWordDialog(id = null) {
@@ -904,7 +914,7 @@ wordForm.addEventListener("submit", (e) => {
     exampleRu: wordForm.exampleRu.value.trim(),
     image: wordForm.image.value.trim(),
   };
-  if (!data.word) return;
+  if (!data.word && !data.image) return;
   if (editingId) updateWord(editingId, data);
   else addWord({ ...data, category: pendingCategory || ui.section });
   const wasFromSong = pendingCategory && ui.section === "song";
