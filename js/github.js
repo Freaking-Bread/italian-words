@@ -116,13 +116,29 @@ const ASSET_CACHE = "it-assets-v1";
 const urlCache = new Map();
 let treePromise = null;
 
+// Дерево репо запоминаем в localStorage — без интернета по нему находим
+// уже скачанные файлы в кэше.
+const TREE_KEY = "it_gh_tree";
+function savedTree() {
+  try { return new Map(Object.entries(JSON.parse(localStorage.getItem(TREE_KEY)) || {})); } catch { return new Map(); }
+}
+
 function repoTree() {
   if (!treePromise) {
     treePromise = fetch(`${API}/repos/${GITHUB.owner}/${GITHUB.repo}/git/trees/${encodeURIComponent(GITHUB.branch)}?recursive=1`,
       { headers: headers(), cache: "no-store" })
       .then((r) => { if (!r.ok) throw new Error(`GitHub: ${r.status}`); return r.json(); })
-      .then((j) => new Map(j.tree.filter((t) => t.type === "blob").map((t) => [t.path, t.sha])))
-      .catch((err) => { treePromise = null; throw err; });
+      .then((j) => {
+        const map = new Map(j.tree.filter((t) => t.type === "blob" && !t.path.endsWith(".json")).map((t) => [t.path, t.sha]));
+        try { localStorage.setItem(TREE_KEY, JSON.stringify(Object.fromEntries(map))); } catch { /* нет места — не страшно */ }
+        return map;
+      })
+      .catch((err) => {
+        treePromise = null;
+        const saved = savedTree();
+        if (saved.size) return saved;   // офлайн — работаем по запомненному списку
+        throw err;
+      });
   }
   return treePromise;
 }
@@ -131,24 +147,38 @@ async function openCache() {
   try { return "caches" in window ? await caches.open(ASSET_CACHE) : null; } catch { return null; }
 }
 
-export async function assetUrl(dir, name, mime = "application/octet-stream") {
-  const path = `${dir}/${name}`.replace(/\/+/g, "/");
-  if (urlCache.has(path)) return urlCache.get(path);
-
+// Ответ с байтами файла: из кэша, иначе скачать и положить в кэш.
+async function assetResponse(path, mime) {
   const sha = (await repoTree()).get(path);
   if (!sha) throw new Error(`Файл ${path} не найден`);
-
   const cache = await openCache();
   const key = `/__asset/${sha}`;
-  let res = cache && (await cache.match(key));
-  if (!res) {
-    const raw = await fetch(`${contentsUrl(path)}?ref=${encodeURIComponent(GITHUB.branch)}`, { headers: headers("application/vnd.github.raw") });
-    if (!raw.ok) throw new Error(`Не удалось скачать ${path} (${raw.status})`);
-    const blob = new Blob([await raw.arrayBuffer()], { type: mime });
-    if (cache) cache.put(key, new Response(blob, { headers: { "Content-Type": mime } })).catch(() => {});
-    res = new Response(blob);
-  }
+  const hit = cache && (await cache.match(key));
+  if (hit) return hit;
+  const raw = await fetch(`${contentsUrl(path)}?ref=${encodeURIComponent(GITHUB.branch)}`, { headers: headers("application/vnd.github.raw") });
+  if (!raw.ok) throw new Error(`Не удалось скачать ${path} (${raw.status})`);
+  const blob = new Blob([await raw.arrayBuffer()], { type: mime });
+  if (cache) await cache.put(key, new Response(blob, { headers: { "Content-Type": mime } })).catch(() => {});
+  return new Response(blob);
+}
+
+const assetPath = (dir, name) => `${dir}/${name}`.replace(/\/+/g, "/");
+
+export async function assetUrl(dir, name, mime = "application/octet-stream") {
+  const path = assetPath(dir, name);
+  if (urlCache.has(path)) return urlCache.get(path);
+  const res = await assetResponse(path, mime);
   const objUrl = URL.createObjectURL(new Blob([await res.blob()], { type: mime }));
   urlCache.set(path, objUrl);
   return objUrl;
+}
+
+// Заранее скачать файлы в кэш (для офлайна). onProgress(done, total).
+export async function prefetchAssets(dir, names, mime, onProgress = () => {}) {
+  let done = 0, failed = 0;
+  for (const name of names) {
+    try { await assetResponse(assetPath(dir, name), mime); } catch { failed++; }
+    onProgress(++done, names.length);
+  }
+  return { done, failed };
 }

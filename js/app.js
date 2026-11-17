@@ -9,7 +9,7 @@ import {
 } from "./store.js";
 import {
   pullCollection, pushCollection, ConflictError,
-  getToken, setToken, isConfigured, checkAccess, assetUrl,
+  getToken, setToken, isConfigured, checkAccess, assetUrl, prefetchAssets,
 } from "./github.js";
 import {
   play as playSong, toggle as togglePlay, next as nextSong, prev as prevSong,
@@ -1055,8 +1055,32 @@ $("#btn-save-token").addEventListener("click", async () => {
   refreshSyncStatus();
   if (!val) { toast("Токен удалён", "warn"); return; }
   if (!/^github_pat_|^ghp_/.test(val)) { toast("Похоже, это не токен (нужен github_pat_…)", "err"); return; }
-  try { toast("Проверяю доступ…"); await checkAccess(); toast("Токен сохранён, доступ есть ✓", "ok"); }
-  catch (err) { toast(err.message, "err"); }
+  try {
+    toast("Проверяю доступ…");
+    await checkAccess();
+    // сразу подтянуть данные с GitHub (слиянием — локальное не теряется)
+    await pullAndMerge();
+    render();
+    if (dirtyCollections().length) await pushDirty();
+    refreshSyncStatus();
+    const words = getWords().filter((w) => w.category === "word");
+    toast(`Готово: ${words.filter((w) => w.learned).length} из ${words.length} слов выучено ✓`, "ok");
+  } catch (err) { toast(err.message, "err"); }
+});
+
+// Скачать все mp3 песен в память устройства — чтобы слушать без интернета
+$("#btn-offline-songs").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  if (!isConfigured()) { toast("Сначала сохрани токен", "warn"); return; }
+  const files = [...new Set(getSongs().map((s) => s.audio).filter((a) => a && !isUrl(a)))];
+  if (!files.length) { toast("Песен с mp3 нет", "warn"); return; }
+  btn.disabled = true;
+  try {
+    const { failed } = await prefetchAssets(GITHUB.dirs.audio, files, "audio/mpeg",
+      (d, t) => { btn.textContent = `Скачиваю ${d} / ${t}…`; });
+    toast(failed ? `Скачано ${files.length - failed} из ${files.length}` : `Все ${files.length} песен на устройстве ✓`, failed ? "warn" : "ok");
+  } catch (err) { toast(err.message, "err"); }
+  finally { btn.disabled = false; btn.textContent = "Скачать песни на устройство"; }
 });
 
 // «Загрузить из GitHub» — версия с GitHub целиком заменяет локальную
@@ -1091,6 +1115,7 @@ function setSyncStatus(state) {
   clearTimeout(hideStatusTimer);
   if (state === "saving") { el.className = "sync-indicator is-visible"; el.innerHTML = `<span class="spinner"></span><span>Сохраняю…</span>`; }
   else if (state === "saved") { el.className = "sync-indicator is-visible is-saved"; el.innerHTML = `<span class="sync-ic">✓</span><span>Сохранено</span>`; hideStatusTimer = setTimeout(() => (el.className = "sync-indicator"), 2200); }
+  else if (state === "offline") { el.className = "sync-indicator is-visible"; el.innerHTML = `<span class="sync-ic">⏸</span><span>Без сети — сохранено на телефоне</span>`; hideStatusTimer = setTimeout(() => (el.className = "sync-indicator"), 3000); }
   else if (state === "error") { el.className = "sync-indicator is-visible is-error"; el.innerHTML = `<span class="sync-ic">⚠</span><span>Не сохранено</span>`; }
   else el.className = "sync-indicator";
 }
@@ -1100,15 +1125,34 @@ let pushTimer = null;
 function scheduleAutoPush() {
   if (!isConfigured()) return;
   clearTimeout(pushTimer);
+  if (!navigator.onLine) { setSyncStatus("offline"); return; } // уйдёт, когда появится сеть
   setSyncStatus("saving");
   pushTimer = setTimeout(async () => {
     try {
       await pushDirty();
       refreshSyncStatus();
       setSyncStatus("saved");
-    } catch (err) { console.warn("auto-push failed:", err.message); setSyncStatus("error"); }
+    } catch (err) {
+      console.warn("auto-push failed:", err.message);
+      // fetch упал без ответа сервера — значит, сети нет: правки ждут на телефоне
+      setSyncStatus(!navigator.onLine || err instanceof TypeError ? "offline" : "error");
+    }
   }, 2500);
 }
+
+// Появилась сеть / вернулись в приложение — подтянуть свежее и отправить накопленное.
+let lastSync = 0;
+async function syncNow() {
+  if (!isConfigured() || !navigator.onLine || Date.now() - lastSync < 20000) return;
+  lastSync = Date.now();
+  try {
+    const { changed } = await pullAndMerge();
+    if (changed) render();
+    if (dirtyCollections().length) scheduleAutoPush();
+  } catch (err) { console.warn("sync failed:", err.message); }
+}
+window.addEventListener("online", () => { lastSync = 0; syncNow(); });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") syncNow(); });
 
 // ── Тулбар / фильтры / вкладки / тема ────────────────────────────────
 let searchTimer = null;
@@ -1367,12 +1411,10 @@ async function init() {
 
   // Каждый заход — свежие данные с GitHub (слияние, ничего не теряется),
   // потом отправка того, что не успело уйти в прошлый раз.
-  if (isConfigured()) {
-    try {
-      const { changed } = await pullAndMerge();
-      if (changed) render();
-      if (dirtyCollections().length) scheduleAutoPush();
-    } catch (err) { console.warn("sync on start failed:", err.message); }
-  }
+  await syncNow();
+
+  // Офлайн-режим: оболочка сайта в кэше + просим браузер не стирать данные
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 }
 init();
